@@ -1,0 +1,12 @@
+---
+services:
+  app:
+    build:
+      context: .
+      dockerfile: build/dev/Containerfile
+    restart: unless-stopped
+    ports:
+      - 38697:38697
+    volumes:
+      - ./:/opt/app/
+    env_file: build/dev/.env

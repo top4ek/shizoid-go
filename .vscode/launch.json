@@ -1,0 +1,18 @@
+{
+  "configurations": [
+    {
+      "name": "(Shizoid-go) Remote debug API server",
+      "type": "go",
+      "request": "attach",
+      "mode": "remote",
+      "port": 38697,
+      "host": "127.0.0.1",
+      "substitutePath": [
+        {
+          "to": "/opt/app",
+          "from": "${workspaceFolder}"
+        }
+      ]
+    }
+  ]
+}
