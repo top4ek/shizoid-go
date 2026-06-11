@@ -2,26 +2,29 @@ FROM golang:alpine AS builder
 
 WORKDIR /opt
 
-ENV GO111MODULE "on"
-ENV GOOS "linux"
-ENV GOARCH "amd64"
-ENV CGO_ENABLED 0
+ENV GO111MODULE=on
+ENV GOOS=linux
+ENV GOARCH=amd64
+ENV CGO_ENABLED=0
 
-RUN apk --no-cache --update add ca-certificates curl git
+RUN apk --no-cache --update add ca-certificates git
 
-ARG CI_COMMIT_SHORT_SHA
+ARG GIT_COMMIT=unknown
 
-COPY . /opt
+COPY go.mod go.sum ./
+RUN go mod download && go mod verify
 
-RUN go mod download && \
-  go mod verify && \
-  go build -o /opt/shizoid
-# go build -ldflags="-X 'shizoid/version.Version=${CI_COMMIT_SHORT_SHA}'" -o /opt/shizoid
+COPY . .
+
+RUN go build -trimpath \
+  -ldflags="-s -w -X shizoid/internal/version.commit=${GIT_COMMIT}" \
+  -o /shizoid ./cmd/app
 
 FROM scratch
+
 EXPOSE 8095
 
-# COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
-COPY --from=builder /opt/shizoid /
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=builder /shizoid /shizoid
 
 CMD ["/shizoid"]

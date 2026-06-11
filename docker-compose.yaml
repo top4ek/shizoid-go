@@ -5,8 +5,33 @@ services:
       context: .
       dockerfile: build/dev/Containerfile
     restart: unless-stopped
+    depends_on:
+      - postgres
     ports:
       - 38697:38697
     volumes:
       - ./:/opt/app/
+
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    ports:
+      - 5432:5432
     env_file: build/dev/.env
+
+  llama:
+    image: ghcr.io/ggml-org/llama.cpp:server
+    restart: unless-stopped
+    ports:
+      - 3110:3110
+    volumes:
+      - ./models:/models
+    env_file: build/dev/.env
+    command: >
+      --jinja
+      --reasoning off
+      --reasoning-format none
+      --reasoning-budget 0
+      --chat-template-kwargs "{\"enable_thinking\": false}"
+      --slots
+    mem_limit: ${LLAMA_MEM_LIMIT:-6g}

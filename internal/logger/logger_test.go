@@ -6,7 +6,14 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestInstance(t *testing.T) {
+func TestInstanceProduction(t *testing.T) {
+	Init(false, "info")
+	logger := Instance()
+	assert.NotNil(t, logger)
+}
+
+func TestInstanceDevelopment(t *testing.T) {
+	Init(true, "debug")
 	logger := Instance()
 	assert.NotNil(t, logger)
 }

@@ -2,4 +2,10 @@
 .DS_Store
 .idea
 .vscode
+.cursor
 tmp
+app
+migrate
+models
+graphify-out
+build/dev

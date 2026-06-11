@@ -6,6 +6,7 @@ import (
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 
+	"shizoid/internal/telegram"
 	"shizoid/internal/utils"
 )
 
@@ -17,31 +18,20 @@ const (
 )
 
 func Handler(ctx context.Context, b *bot.Bot, update *models.Update) {
-	if reply(update) {
-		b.SendMessage(ctx, messageParams(update))
-		b.DeleteMessage(ctx, deleteParams(update))
+	if !canReply(update) {
+		return
 	}
+
+	replyToID := 0
+	if update.Message.ReplyToMessage != nil {
+		replyToID = update.Message.ReplyToMessage.ID
+	}
+
+	telegram.Send(ctx, b, update, bot.EscapeMarkdown(text(update)), models.ParseModeMarkdown, replyToID)
+	telegram.Delete(ctx, b, update.Message.Chat.ID, update.Message.ID)
 }
 
-func deleteParams(update *models.Update) *bot.DeleteMessageParams {
-	return &bot.DeleteMessageParams{
-		ChatID:    update.Message.Chat.ID,
-		MessageID: update.Message.ID,
-	}
-}
-func messageParams(update *models.Update) *bot.SendMessageParams {
-	return &bot.SendMessageParams{
-		ChatID:          update.Message.Chat.ID,
-		MessageThreadID: update.Message.MessageThreadID,
-		ReplyParameters: &models.ReplyParameters{
-			MessageID: update.Message.ID,
-		},
-		Text:      text(update),
-		ParseMode: models.ParseModeMarkdown,
-	}
-}
-
-func reply(update *models.Update) bool {
+func canReply(update *models.Update) bool {
 	return utils.IsBotOwner(update) && text(update) != ""
 }
 

@@ -6,12 +6,15 @@
 *.out
 *.so
 *.test
+*.dump
 .env
+build/dev/config.yaml
 .git
 .idea/
-coverage.*
 dev/.env
 go.work
 go.work.sum
 profile.cov
 tmp
+models/*
+!models/.gitkeep

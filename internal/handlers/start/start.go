@@ -2,47 +2,35 @@ package start
 
 import (
 	"context"
-	"shizoid/internal/config"
 
 	"github.com/go-telegram/bot"
-	"github.com/go-telegram/bot/models"
+	tgmodels "github.com/go-telegram/bot/models"
+	"go.uber.org/zap"
+
+	"shizoid/internal/app"
+	"shizoid/internal/locale"
+	"shizoid/internal/logger"
+	"shizoid/internal/models"
+	"shizoid/internal/telegram"
 )
 
 const (
 	Command     = "start"
-	Description = "Starts bot in current chat"
+	Description = "Start the bot in current chat"
 	HandlerType = bot.HandlerTypeMessageText
 	MatchType   = bot.MatchTypeCommandStartOnly
 )
 
-func Handler(ctx context.Context, b *bot.Bot, update *models.Update) {
-	if reply(update, config.Environment.BotOwners) == true {
-		enableChains(update)
-		b.SendMessage(ctx, messageParams(update))
+func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
+	if update.Message == nil || update.Message.From == nil {
+		return
 	}
-}
-
-func enableChains(update *models.Update) {
-	// TODO
-}
-
-func messageParams(update *models.Update) *bot.SendMessageParams {
-	return &bot.SendMessageParams{
-		ChatID:          update.Message.Chat.ID,
-		MessageThreadID: update.Message.MessageThreadID,
-		ReplyParameters: &models.ReplyParameters{
-			MessageID: update.Message.ID,
-		},
-		Text:      text(),
-		ParseMode: models.ParseModeMarkdown,
+	if !app.IsOwner(update.Message.From.ID) || !app.Ready() {
+		return
 	}
-}
-
-func reply(update *models.Update, owners []int64) bool {
-	// if update.Message.From.ID == config.Environment.BotOwners[].
-	return true
-}
-
-func text() string {
-	return "Start!"
+	if err := models.Chats.Enable(ctx, update.Message.Chat.ID); err != nil {
+		logger.Instance().Error("start enable", zap.Error(err))
+		return
+	}
+	telegram.Reply(ctx, b, update, locale.Random(app.Locale(ctx), "ok"), "")
 }

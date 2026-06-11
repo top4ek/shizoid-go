@@ -4,12 +4,15 @@ import (
 	"context"
 	"crypto/sha1"
 	"encoding/binary"
-
-	"shizoid/internal/utils"
 	"time"
 
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
+
+	"shizoid/internal/app"
+	"shizoid/internal/locale"
+	"shizoid/internal/telegram"
+	"shizoid/internal/utils"
 )
 
 const (
@@ -19,61 +22,31 @@ const (
 	MatchType   = bot.MatchTypeCommand
 )
 
-var (
-	emptyReplies = []string{
-		"А?",
-		"И чо?",
-		"Не тряси бестолку.",
-		"В дудку себе помолчи.",
-		"А спросить?",
-	}
-
-	replies = []string{
-		"Бесспорно.",
-		"Предрешено.",
-		"Никаких сомнений!",
-		"Определённо да.",
-		"Можешь быть уверен в этом.",
-		"Мне кажется — «да»",
-		"Вероятнее всего.",
-		"Хорошие перспективы.",
-		"Знаки говорят — «да».",
-		"Да.",
-		"Пока не ясно.",
-		"Cпроси завтра.",
-		"Лучше не рассказывать.",
-		"Сегодня нельзя предсказать.",
-		"Сконцентрируйся и спроси опять.",
-		"Даже не думай.",
-		"Мой ответ — «нет».",
-		"По моим данным — «нет».",
-		"Перспективы не очень хорошие.",
-		"Весьма сомнительно.",
-	}
-)
-
 func Handler(ctx context.Context, b *bot.Bot, update *models.Update) {
-	b.SendMessage(ctx, messageParams(update))
-}
-
-func messageParams(update *models.Update) *bot.SendMessageParams {
+	if update.Message == nil || update.Message.From == nil || !app.Enabled(ctx) {
+		return
+	}
 	payload := utils.ExtractCommandPayloadText(update)
-	return &bot.SendMessageParams{
-		ChatID:          update.Message.Chat.ID,
-		MessageThreadID: update.Message.MessageThreadID,
-		ReplyParameters: &models.ReplyParameters{
-			MessageID: update.Message.ID,
-		},
-		Text: response(payload, update.Message.From.ID),
+	text := response(app.Locale(ctx), payload, update.Message.From.ID)
+	if text != "" {
+		telegram.Reply(ctx, b, update, text, "")
 	}
 }
 
-func response(payload string, userId int64) string {
+func response(lang, payload string, userID int64) string {
 	if payload == "" {
-		return utils.PickRandomString(emptyReplies)
+		empty := locale.List(lang, "eightball.empty")
+		if len(empty) == 0 {
+			return "?"
+		}
+		return utils.PickRandomString(empty)
 	}
-	digestResult := digest(payload, userId, time.Now())
-	return replies[digestResult%uint64(len(replies))]
+	replies := locale.List(lang, "eightball.replies")
+	if len(replies) == 0 {
+		return "?"
+	}
+	d := digest(payload, userID, time.Now())
+	return replies[d%uint64(len(replies))]
 }
 
 func digest(text string, userID int64, now time.Time) uint64 {

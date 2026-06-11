@@ -5,6 +5,10 @@ import (
 
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
+
+	"shizoid/internal/app"
+	"shizoid/internal/locale"
+	"shizoid/internal/telegram"
 )
 
 const (
@@ -15,20 +19,9 @@ const (
 )
 
 func Handler(ctx context.Context, b *bot.Bot, update *models.Update) {
-	b.SendMessage(ctx, messageParams(update))
-}
-
-func messageParams(update *models.Update) *bot.SendMessageParams {
-	return &bot.SendMessageParams{
-		ChatID:          update.Message.Chat.ID,
-		MessageThreadID: update.Message.MessageThreadID,
-		ReplyParameters: &models.ReplyParameters{
-			MessageID: update.Message.ID,
-		},
-		Text: text(),
+	text := locale.Random(app.Locale(ctx), "ping")
+	if text == "" {
+		text = "Pong!"
 	}
-}
-
-func text() string {
-	return "Pong!"
+	telegram.Reply(ctx, b, update, text, "")
 }

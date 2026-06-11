@@ -1,28 +1,8 @@
 package version
 
-import (
-	"os"
-	"strings"
-	"sync"
-)
-
-var (
-	cached   string
-	once     sync.Once
-	readFile = os.ReadFile
-)
+// commit is set at link time via -ldflags "-X shizoid/internal/version.commit=...".
+var commit = "unknown"
 
 func Version() string {
-	once.Do(func() {
-		cached, _ = readVersionFile(".version")
-	})
-	return cached
-}
-
-func readVersionFile(path string) (string, error) {
-	data, err := readFile(path)
-	if err != nil {
-		return "unknown", err
-	}
-	return strings.TrimSpace(string(data)), nil
+	return commit
 }

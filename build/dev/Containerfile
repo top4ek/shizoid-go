@@ -7,9 +7,7 @@ ENV GO111MODULE="on"
 ENV GOOS="linux"
 ENV CGO_ENABLED=0
 
-HEALTHCHECK --interval=10s --timeout=5s --retries=5 CMD curl -f -o /dev/null http://127.0.0.1:3000/ping || exit 1
-
-ENTRYPOINT ["reflex", "-d", "fancy", "-c", "./build/dev/reflex.conf"]
+ENTRYPOINT ["sh", "-c", "test -f build/dev/config.yaml || cp build/dev/config.yaml-example build/dev/config.yaml; exec reflex -d fancy -c ./build/dev/reflex.conf"]
 
 RUN apk update && \
   apk add --no-cache ca-certificates git && \

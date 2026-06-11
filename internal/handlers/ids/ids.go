@@ -6,34 +6,37 @@ import (
 
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
+
+	"shizoid/internal/app"
+	"shizoid/internal/locale"
+	"shizoid/internal/telegram"
 )
 
 const (
-	Command     = "ids"
-	Description = "Returns IDs of chat and user"
-	HandlerType = bot.HandlerTypeMessageText
-	MatchType   = bot.MatchTypeCommandStartOnly
+	Command        = "ids"
+	Description    = "Returns IDs of chat and user"
+	HandlerType    = bot.HandlerTypeMessageText
+	MatchType      = bot.MatchTypeCommandStartOnly
+	replyParseMode = models.ParseModeMarkdown
 )
 
 func Handler(ctx context.Context, b *bot.Bot, update *models.Update) {
-	b.SendMessage(ctx, messageParams(update))
-}
-
-func messageParams(update *models.Update) *bot.SendMessageParams {
-	return &bot.SendMessageParams{
-		ChatID:          update.Message.Chat.ID,
-		MessageThreadID: update.Message.MessageThreadID,
-		ReplyParameters: &models.ReplyParameters{
-			MessageID: update.Message.ID,
-		},
-		Text:      text(update),
-		ParseMode: models.ParseModeMarkdown,
+	if update.Message == nil || update.Message.From == nil {
+		return
 	}
+	telegram.Reply(ctx, b, update, text(app.Locale(ctx), update), replyParseMode)
 }
 
-func text(update *models.Update) string {
-	return fmt.Sprintf("*Chat*: %d\n*User*: %d\n*Type*: %s",
-		update.Message.Chat.ID,
-		update.Message.From.ID,
-		update.Message.Chat.Type)
+func text(lang string, update *models.Update) string {
+	chatID := bot.EscapeMarkdown(fmt.Sprint(update.Message.Chat.ID))
+	chatType := bot.EscapeMarkdown(string(update.Message.Chat.Type))
+	userID := bot.EscapeMarkdown(fmt.Sprint(update.Message.From.ID))
+	return fmt.Sprintf(
+		"*%s:* %s \\(%s\\)\n*%s:* %s",
+		bot.EscapeMarkdown(locale.T(lang, "ids.chat")),
+		chatID,
+		chatType,
+		bot.EscapeMarkdown(locale.T(lang, "ids.user")),
+		userID,
+	)
 }

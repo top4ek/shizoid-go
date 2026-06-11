@@ -5,20 +5,22 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
+	"shizoid/internal/locale"
 )
 
 func TestResponse_Payload(t *testing.T) {
-	got := response("/eightball test?", 234)
-
+	got := response("ru", "test?", 234)
+	replies := locale.List("ru", "eightball.replies")
+	assert.NotEmpty(t, replies)
 	assert.Contains(t, replies, got)
-
 }
 
 func TestResponse_Empty(t *testing.T) {
-	got := response("/eightball", 234)
-
-	assert.Contains(t, emptyReplies, got)
-
+	got := response("ru", "", 234)
+	empty := locale.List("ru", "eightball.empty")
+	assert.NotEmpty(t, empty)
+	assert.Contains(t, empty, got)
 }
 
 func TestDigest(t *testing.T) {

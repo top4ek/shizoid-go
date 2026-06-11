@@ -5,7 +5,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 
 	"shizoid/internal/config"
@@ -35,35 +34,20 @@ func withBotOwners(t *testing.T, owners []int64, testFn func()) {
 	testFn()
 }
 
-func TestReplyForOwner(t *testing.T) {
+func TestCanReply_Owner(t *testing.T) {
 	withBotOwners(t, []int64{123, 234, 345}, func() {
-		result := reply(update())
+		result := canReply(update())
 
 		assert.True(t, result)
 	})
 }
 
-func TestReplyForUser(t *testing.T) {
+func TestCanReply_NonOwner(t *testing.T) {
 	withBotOwners(t, []int64{123, 456, 345}, func() {
-		result := reply(update())
+		result := canReply(update())
 
 		assert.False(t, result)
 	})
-}
-
-func TestMessageParams(t *testing.T) {
-	update := update()
-	expected := &bot.SendMessageParams{
-		ChatID:          update.Message.Chat.ID,
-		MessageThreadID: update.Message.MessageThreadID,
-		ReplyParameters: &models.ReplyParameters{
-			MessageID: update.Message.ID,
-		},
-		Text:      text(update),
-		ParseMode: models.ParseModeMarkdown,
-	}
-
-	assert.Equal(t, messageParams(update), expected)
 }
 
 func TestText(t *testing.T) {

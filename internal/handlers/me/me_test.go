@@ -4,10 +4,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
+	"github.com/stretchr/testify/assert"
+
+	"shizoid/internal/locale"
 )
 
 func updateMock() *models.Update {
@@ -26,7 +27,7 @@ func updateMock() *models.Update {
 	}
 }
 
-func TestText_EmptyStrging(t *testing.T) {
+func TestResponseText_EmptyPayload(t *testing.T) {
 	mock := &models.Update{
 		Message: &models.Message{
 			From: &models.User{
@@ -40,30 +41,25 @@ func TestText_EmptyStrging(t *testing.T) {
 		},
 	}
 
-	strs := strings.SplitN(text(mock), " ", 2)
+	strs := strings.SplitN(responseText("ru", mock), " ", 2)
 
-	assert.Equal(t, "*@shizoid*", strs[0])
-	assert.Contains(t, emptyResponses, strs[1])
+	assert.Equal(t, "*shizoid*", strs[0])
+	actions := locale.List("ru", "me")
+	assert.NotEmpty(t, actions)
+	assert.Contains(t, escapedActions(actions), strs[1])
 }
 
-func TestText_NonEmptyStrging(t *testing.T) {
-	strs := strings.SplitN(text(updateMock()), " ", 2)
+func TestResponseText_NonEmptyPayload(t *testing.T) {
+	strs := strings.SplitN(responseText("ru", updateMock()), " ", 2)
 
-	assert.Equal(t, "*@shizoid*", strs[0])
-	assert.Equal(t, "thinks different", strs[1])
+	assert.Equal(t, "*shizoid*", strs[0])
+	assert.Equal(t, bot.EscapeMarkdown("thinks different"), strs[1])
 }
 
-func TestMessageParams(t *testing.T) {
-	update := updateMock()
-	expected := &bot.SendMessageParams{
-		ChatID:          update.Message.Chat.ID,
-		MessageThreadID: update.Message.MessageThreadID,
-		ReplyParameters: &models.ReplyParameters{
-			MessageID: update.Message.ID,
-		},
-		Text:      text(update),
-		ParseMode: models.ParseModeMarkdown,
+func escapedActions(actions []string) []string {
+	out := make([]string, len(actions))
+	for i, a := range actions {
+		out[i] = bot.EscapeMarkdown(a)
 	}
-
-	assert.Equal(t, expected, messageParams(update))
+	return out
 }

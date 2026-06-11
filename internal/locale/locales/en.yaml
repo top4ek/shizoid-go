@@ -1,0 +1,216 @@
+en:
+  yes: "yes"
+  no: "no"
+
+  common:
+    not_owner: "This command is for bot admins only."
+    not_admin: "This command is for chat admins only."
+    error: "Something went wrong. Try again later."
+
+  ok:
+    - I'll do any dirty job, fast and cheap!
+    - We need peace, preferably the whole of it!
+    - Will be done.
+    - Ja wohl, Dark Helmet.
+    - Engaging afterburner!
+    - I bow to your will.
+    - I crave to serve.
+    - Let the prophecy be fulfilled.
+    - The pay is lousy and the duty is no sugar.
+    - Well, now I'll be killed…
+    - Oh, my old bones.
+
+  nok:
+    - I can't stand while others work. I'll go lie down.
+    - Don't disturb my thinking.
+    - Cannot create here.
+    - To rule the world you need a solid plan!
+    - This wasn't in the blueprints!
+    - Need more gold.
+    - Can't shoot sober!
+    - The human body is 80% liquid. For some, brake fluid.
+    - Are you the king? I didn't vote for you!
+    - Shiza is a proud bird. Won't fly until you kick it.
+    - No entry for the otherworldly.
+    - Begone foul spirit, stay pure spirit!
+
+  lang:
+    ask: "What do you want? Available languages: %{list}"
+    current: "Current language: %{lang}"
+    set: "Language set to: %{lang}"
+    unknown: "No such language. Available: %{list}"
+
+  generation:
+    current: "Generation mode: %{mode}"
+    set: "Generation mode set to: %{mode}"
+    unknown: "Unknown mode. Available: %{list}"
+
+  prompt:
+    current: "Chat system prompt:\n%{prompt}"
+    none: "Chat system prompt is not set."
+    set: "Chat system prompt updated."
+    cleared: "Chat system prompt cleared."
+    usage: "Usage: /prompt — show; /prompt <text> — set; /prompt disable — clear"
+
+  gab:
+    prefix: "I butt in with a chance of"
+    error: "Nope, give me a number from 0 to 50."
+
+  ids:
+    chat: "Chat"
+    user: "User"
+
+  ping:
+    - Pong!
+    - Huh?
+    - I'm here!
+    - Look who's pinging.
+    - What's up?
+    - Ping yourself!
+
+  status: |
+    *Active:* %{active}
+    *Gab:* %{gab}%
+    *Pairs in DB:* %{pairs}
+    *Captcha:* %{captcha}
+    *Greeting:* %{greeting}
+    *Winner:* %{winner}
+    *Language:* %{lang}
+
+    *Version:* %{version}
+
+  eightball:
+    empty:
+      - "Huh?"
+      - "And?"
+      - "Don't shake the magic ball for nothing."
+      - "Shush."
+      - "Try asking?"
+    replies:
+      - "Certainly."
+      - "Decidedly."
+      - "No doubt."
+      - "Definitely yes."
+      - "You can be sure."
+      - "I think — yes."
+      - "Most likely."
+      - "Good prospects."
+      - "Signs say — yes."
+      - "Yes."
+      - "Unclear yet."
+      - "Ask tomorrow."
+      - "Better not tell."
+      - "Can't predict today."
+      - "Concentrate and ask again."
+      - "Don't even think."
+      - "My answer is — no."
+      - "My sources say — no."
+      - "Outlook not so good."
+      - "Very doubtful."
+
+  me:
+    - "says nothing meaningfully."
+    - "thinks out loud."
+    - "ponders things."
+    - "meditates."
+    - "understands nothing."
+    - "calmly waits for enemy corpses to float by."
+    - "loves everyone."
+    - "in the zone, in the flow."
+    - "buries head in the sand."
+    - "smokes bamboo."
+    - "makes a wish."
+    - "scrolls memes and gets nostalgic."
+
+  binary_dice:
+    anchors:
+      - or
+      - either
+    answers:
+      - Unclear.
+      - Tough choice.
+      - Escobar's axiom.
+      - I like the first one better.
+      - Definitely the first.
+      - The first option.
+      - I like the second one better.
+      - Definitely the second.
+      - The second option.
+
+  cool_story:
+    lazy:
+      - "Kinda lazy :("
+      - Nothing comes to my processor.
+      - Not in the mood.
+
+  text:
+    anchors:
+      - shizik
+      - shiza
+      - schizo
+      - druggie
+      - schizophasia
+      - nonsense
+
+  winner:
+    current: |
+      *Current stats:*
+
+      %{top}
+    winner: |
+      _%{name}_ of the day — %{user}
+
+      *Top 10 of the year:*
+      %{top}
+    no_one: "No one yet :("
+    disabled: "Disabled"
+    default: "Flooder"
+    enabled: "Winner draw enabled: %{name}"
+    turned_off: "Winner draw disabled."
+    usage: "Usage: /winner, /winner current, /winner enable [label], /winner disable"
+
+  idle:
+    - "So dead in here :("
+    - Anyone alive?
+    - Hey, peekaboo!
+    - Oh, a tumbleweed just rolled by.
+    - One-two-three-four-five, off I go to booze!
+
+  idle_cmd:
+    enabled: "I'll poke the chat after %{days} days of silence."
+    disabled: "I won't poke the silent anymore."
+    usage: "Usage: /idle <days> or /idle disable"
+
+  greeting:
+    set: "Greeting set."
+    cleared: "Greeting removed."
+    usage: "Usage: /greeting <text> or /greeting disable"
+
+  captcha:
+    enabled: "Captcha enabled."
+    disabled: "Captcha disabled."
+    usage: "Usage: /captcha enable or /captcha disable"
+    message: 'Hi, %{user}\! Press %{word} button\. You have 1 minute\.'
+    solved: "Welcome!"
+    wrong: "Wrong button."
+    symbols:
+      - emoji: "🌹"
+        word: "rose"
+      - emoji: "💡"
+        word: "light bulb"
+      - emoji: "⌛"
+        word: "hourglass"
+      - emoji: "❄️"
+        word: "snowflake"
+      - emoji: "👻"
+        word: "ghost"
+      - emoji: "🔒"
+        word: "lock"
+      - emoji: "🏠"
+        word: "house"
+      - emoji: "🎒"
+        word: "backpack"
+      - emoji: "🚗"
+        word: "car"
+      - emoji: "🌈"
+        word: "rainbow"
