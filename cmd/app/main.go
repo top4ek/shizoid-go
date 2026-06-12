@@ -25,14 +25,13 @@ import (
 
 func main() {
 	configPath := flag.String("config", "config.yaml", "path to config file")
+	migrateOnly := flag.Bool("migrate-only", false, "run database migrations and exit")
 	flag.Parse()
 
 	if err := config.Load(*configPath); err != nil {
 		panic(err)
 	}
 	logger.Init(config.Development(), config.LogLevel())
-	sentry.Init()
-	defer sentry.Flush()
 
 	db, err := models.OpenDB(
 		config.Database.Host,
@@ -49,6 +48,14 @@ func main() {
 	if err := migrations.Run(db); err != nil {
 		logger.Instance().Fatal("migrations", zap.Error(err))
 	}
+	if *migrateOnly {
+		logger.Instance().Info("migrations applied")
+		return
+	}
+
+	sentry.Init()
+	defer sentry.Flush()
+
 	app.Init(db)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)

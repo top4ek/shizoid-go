@@ -174,22 +174,25 @@ func runMemory() {
 		logger.Instance().Error("memory: active chats", zap.Error(err))
 		return
 	}
-	window := time.Duration(config.Environment.SummaryWindowHours) * time.Hour
 	for _, chat := range chats {
 		if chat.GenerationMode != models.GenerationModeNeural {
-			continue
-		}
-		since := time.Now().Add(-window)
-		if chat.MemorySummarizedAt.Valid && chat.MemorySummarizedAt.Time.After(since) {
-			since = chat.MemorySummarizedAt.Time
-		}
-		msgs, err := models.Messages.TextsSince(ctx, chat.ID, since)
-		if err != nil || len(msgs) == 0 {
 			continue
 		}
 		existing := ""
 		if chat.Memory.Valid {
 			existing = chat.Memory.String
+		}
+		budget := summaryMessageBudget(existing)
+		if budget <= 0 {
+			continue
+		}
+		since := time.Time{}
+		if chat.MemorySummarizedAt.Valid {
+			since = chat.MemorySummarizedAt.Time
+		}
+		msgs, err := models.Messages.TextsSinceByBytes(ctx, chat.ID, since, budget)
+		if err != nil || len(msgs) == 0 {
+			continue
 		}
 		logger.Instance().Debug("memory summarize",
 			zap.Int64("chat_id", chat.ID),
@@ -228,6 +231,16 @@ func runMessagePrune() {
 	if n > 0 {
 		logger.Instance().Info("prune messages", zap.Int64("deleted", n))
 	}
+}
+
+const summaryBudgetMargin = 256
+
+func summaryMessageBudget(existing string) int {
+	overhead := len(config.Environment.SummaryPrompt) + len("New messages:\n") + summaryBudgetMargin
+	if existing != "" {
+		overhead += len("Existing memory:\n") + len(existing) + len("\n\n")
+	}
+	return config.MaxSummaryContextBytes - overhead
 }
 
 func truncateRunes(s string, max int) string {

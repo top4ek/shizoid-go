@@ -30,7 +30,6 @@ app:
   idle_cron: "40 19 * * *"
   # app_prompt: override the default system prompt for neural replies
   memory_cron: "0 */6 * * *"
-  summary_window_hours: 6
   # summary_prompt: override the default memory summarization instructions
 
 # Neural provider fallback chains. Each list is tried top to bottom until a

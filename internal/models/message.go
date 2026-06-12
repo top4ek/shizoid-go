@@ -130,6 +130,37 @@ func (messages) RecentTextsByBytes(ctx context.Context, chatID int64, maxBytes i
 	return recentLatestMessageText(ctx, chatID)
 }
 
+func (messages) TextsSinceByBytes(ctx context.Context, chatID int64, since time.Time, maxBytes int) ([]string, error) {
+	if maxBytes <= 0 {
+		return nil, nil
+	}
+	rows, err := db.QueryContext(ctx, `
+		SELECT text
+		FROM (
+			SELECT text, created_at, id,
+				SUM(octet_length(text)) OVER (
+					ORDER BY created_at DESC, id DESC
+				) AS cum_bytes
+			FROM messages
+			WHERE chat_id = $1 AND created_at >= $2
+		) ranked
+		WHERE cum_bytes <= $3
+		ORDER BY created_at ASC, id ASC`, chatID, since, maxBytes)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var texts []string
+	for rows.Next() {
+		var t string
+		if err := rows.Scan(&t); err != nil {
+			return nil, err
+		}
+		texts = append(texts, t)
+	}
+	return texts, rows.Err()
+}
+
 func (messages) TextsSince(ctx context.Context, chatID int64, since time.Time) ([]string, error) {
 	rows, err := db.QueryContext(ctx,
 		`SELECT text FROM messages WHERE chat_id = $1 AND created_at >= $2 ORDER BY created_at ASC, id ASC`,

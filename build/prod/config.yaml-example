@@ -29,7 +29,6 @@ app:
   winner_cron: "20 4 * * *"
   idle_cron: "40 19 * * *"
   memory_cron: "0 */6 * * *"
-  summary_window_hours: 6
 
 # Optional neural provider chains for /generation neural mode.
 # neural:

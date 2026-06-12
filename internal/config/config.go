@@ -56,10 +56,9 @@ type app_config struct {
 	IdleCron       string  `yaml:"idle_cron" env:"IDLE_CRON" env-default:"40 19 * * *"`
 	CaptchaCron    string  `yaml:"captcha_cron" env:"CAPTCHA_CRON" env-default:"@every 1m"`
 
-	AppPrompt          string `yaml:"app_prompt" env:"APP_PROMPT"`
-	MemoryCron         string `yaml:"memory_cron" env:"MEMORY_CRON" env-default:"0 */6 * * *"`
-	SummaryWindowHours int    `yaml:"summary_window_hours" env:"SUMMARY_WINDOW_HOURS" env-default:"6"`
-	SummaryPrompt      string `yaml:"summary_prompt" env:"SUMMARY_PROMPT"`
+	AppPrompt     string `yaml:"app_prompt" env:"APP_PROMPT"`
+	MemoryCron    string `yaml:"memory_cron" env:"MEMORY_CRON" env-default:"0 */6 * * *"`
+	SummaryPrompt string `yaml:"summary_prompt" env:"SUMMARY_PROMPT"`
 }
 
 type neural_config struct {
@@ -75,7 +74,8 @@ var (
 	Sentry                sentry_config
 	Runtime               runtime_config
 	Neural                neural_config
-	MaxReplyContextBytes  int
+	MaxReplyContextBytes   int
+	MaxSummaryContextBytes int
 )
 
 const defaultReplyContextBytes = 16384
@@ -102,6 +102,10 @@ func Load(path string) error {
 	MaxReplyContextBytes = maxReplyContextBytes(Neural.Reply)
 	if MaxReplyContextBytes <= 0 {
 		MaxReplyContextBytes = defaultReplyContextBytes
+	}
+	MaxSummaryContextBytes = maxReplyContextBytes(Neural.Summary)
+	if MaxSummaryContextBytes <= 0 {
+		MaxSummaryContextBytes = defaultReplyContextBytes
 	}
 
 	if mode, ok := models.ParseGenerationMode(Environment.GenerationMode); ok {

@@ -42,7 +42,11 @@ neural:
       base_url: https://api.example/v1
       model: big.gguf
       context_size: 32000
-  summary: []
+  summary:
+    - name: summary-local
+      base_url: http://llama:3110/v1
+      model: test.gguf
+      context_size: 4096
 `), 0o600))
 
 	require.NoError(t, Load(path))
@@ -55,6 +59,7 @@ neural:
 	require.Len(t, Neural.Reply, 2)
 	assert.Equal(t, "local", Neural.Reply[0].Name)
 	assert.Equal(t, 32000, MaxReplyContextBytes)
+	assert.Equal(t, 4096, MaxSummaryContextBytes)
 	assert.True(t, Development())
 }
 

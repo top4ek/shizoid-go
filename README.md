@@ -44,15 +44,14 @@ and [`build/dev/config.yaml-example`](build/dev/config.yaml-example) for local d
 | `database` | `*` | — | Postgres host/port/name/user/password |
 | `app` | `generation_mode` | `classic` | Default mode for new chats |
 | `app` | `winner_cron` | `20 4 * * *` | Daily winner draw (04:20) |
-| `app` | `memory_cron` | `0 */6 * * *` | Neural memory summarization |
-| `app` | `summary_window_hours` | `6` | Messages included in each memory pass |
+| `app` | `memory_cron` | `0 */6 * * *` | Neural memory summarization (messages since last `memory_summarized_at`) |
 | `app` | `allow_to_all` | `false` | Reply in all chats without `/start` |
 | `app` | `app_prompt` / `summary_prompt` | see example | Neural system / memory prompts |
 | `telegram` | `webhook_url` | — | Webhook mode URL; empty = long polling (`deleteWebhook` on startup) |
 | `telegram` | `webhook_secret_token` | — | Secret for webhook requests (`setWebhook` + header check); auto-generated in webhook mode if omitted |
 | `sentry` | `dsn` | — | Enables Sentry when set |
 | `neural` | `reply` / `summary` | — | Provider fallback chains for neural mode |
-| `neural.*` | `context_size` | — | Per-model UTF-8 byte budget for API payload; max across `reply` also caps DB history |
+| `neural.*` | `context_size` | — | Per-model UTF-8 byte budget for API payload; max across `reply` caps DB history; max across `summary` caps memory input |
 
 Pass `-config path/to/config.yaml` if the file is not named `config.yaml`.
 
@@ -125,21 +124,60 @@ go run ./cmd/app -config build/dev/config.yaml
 
 ## Data migration (Ruby → Go)
 
-One-off scripts — not part of the Go app. Target database must be **empty** (goose
-migrations already applied). Bayan / `data_banks` corpus pairs are skipped; duplicate
-words are merged.
+One-off script [`generate_converted_sql.sh`](generate_converted_sql.sh) — not part of
+the Go app. Bayan / `data_banks` corpus pairs are skipped; duplicate words are merged.
+
+Each `--apply` run **drops and recreates** the target database (`database.name` from
+config), runs goose migrations, then imports data. Stop the bot before applying on
+production. The legacy source database is never modified.
 
 ```bash
-# 1. Generate converted.sql from a Ruby pg_dump (restores into shizoid_legacy)
+# Full cycle: restore dump → generate SQL → apply to target DB
 ./generate_converted_sql.sh \
   --config build/dev/config.yaml \
-  --dump shizoid_production.dump
+  --dump shizoid_production.dump \
+  --apply
 
-# 2. Load into the Go database
-psql -h 127.0.0.1 -U shizoid -d shizoid -v ON_ERROR_STOP=1 -f converted.sql
+# From an already-restored legacy database (e.g. shizoid_production on the server)
+# Use a separate migrate config with a superuser (postgres) for dropdb/createdb.
+# --app-config supplies the bot's database.user for GRANT after import.
+./generate_converted_sql.sh \
+  --config migrate-config.yaml \
+  --app-config build/prod/config.yaml \
+  --pg-container postgresql \
+  --skip-restore \
+  --legacy-dsn "host=127.0.0.1 user=postgres password=... dbname=shizoid_production" \
+  --binary ./shizoid \
+  --apply
+
+# Re-import an existing converted.sql without regenerating
+./generate_converted_sql.sh \
+  --config migrate-config.yaml \
+  --app-config build/prod/config.yaml \
+  --pg-container postgresql \
+  --apply-only \
+  --out scripts/converted.sql
 ```
 
-Re-generate from an already-restored legacy DB: add `--skip-restore`.
+`--legacy-dsn` is a PostgreSQL connection string to the **source** Ruby database.
+When omitted, the script reads from `shizoid_legacy` on the same host as `database`
+in config.
+
+| Flag | Purpose |
+| --- | --- |
+| `--pg-container` | Run `psql`/`dropdb`/`createdb` via `podman exec`; import via `podman cp` |
+| `--app-config` | Read bot `database.user` and grant access after import |
+| `--grant-user` | Same as `--app-config` but explicit (overrides) |
+| `--binary` | Compiled `shizoid` for `-migrate-only` instead of `go run` |
+
+When import runs as `postgres` but the bot connects as `shizoid`, pass
+`--app-config` (or `--grant-user shizoid`) so the app can read the tables.
+
+Schema-only migration (no data import):
+
+```bash
+go run ./cmd/app -config build/dev/config.yaml -migrate-only
+```
 
 ## Test
 
