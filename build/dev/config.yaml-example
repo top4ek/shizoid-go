@@ -33,7 +33,7 @@ app:
   # summary_prompt: override the default memory summarization instructions
 
 # Neural provider fallback chains. Each list is tried top to bottom until a
-# provider answers. reply: chat replies (neural mode). summary: long-term memory cron.
+# provider answers. reply: chat replies (tried before Markov fallback). summary: long-term memory cron.
 neural:
   reply:
     - name: openrouter

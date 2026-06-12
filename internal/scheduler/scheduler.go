@@ -157,10 +157,6 @@ func runIdle(b *bot.Bot) {
 	}
 }
 
-// runMemory summarizes recent messages of each neural-mode chat together with
-// its existing long-term memory, using the summary provider chain configured in
-// neural.summary. Chats with no new messages or a fully unavailable chain are
-// left untouched.
 func runMemory() {
 	logger.Instance().Debug("cron: memory")
 	if !app.Ready() || app.Neural() == nil {
@@ -175,9 +171,6 @@ func runMemory() {
 		return
 	}
 	for _, chat := range chats {
-		if chat.GenerationMode != models.GenerationModeNeural {
-			continue
-		}
 		existing := ""
 		if chat.Memory.Valid {
 			existing = chat.Memory.String

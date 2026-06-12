@@ -36,11 +36,11 @@ func New(n *neural.Client) *Generator {
 func (g *Generator) SetBotID(id int64) { g.botID = id }
 
 // Reply generates a response seeded from the incoming words, falling back to the
-// chat's stored context if the seed yields nothing. In neural mode it first tries
-// the neural client and falls back to the classic Markov path on any failure
-// (busy slots, timeout or an unavailable backend).
+// chat's stored context if the seed yields nothing. When neural reply providers
+// are configured it tries them first and falls back to the chat's Markov mode
+// (classic or simplified) on any failure (busy slots, timeout or unavailable backend).
 func (g *Generator) Reply(ctx context.Context, chat *models.Chat, words []string, userID int64) (string, error) {
-	if chat.GenerationMode == models.GenerationModeNeural && g.neural.ReplyConfigured() {
+	if g.neural.ReplyConfigured() {
 		logger.Instance().Debug("generator neural attempt",
 			zap.Int64("chat_id", chat.ID),
 			zap.Int("words", len(words)),
@@ -49,8 +49,9 @@ func (g *Generator) Reply(ctx context.Context, chat *models.Chat, words []string
 		if err == nil && reply != "" {
 			return reply, nil
 		}
-		logger.Instance().Warn("neural fallback to classic",
+		logger.Instance().Warn("neural fallback to markov",
 			zap.Int64("chat_id", chat.ID),
+			zap.String("mode", chat.GenerationMode.String()),
 			zap.Error(err),
 		)
 	}

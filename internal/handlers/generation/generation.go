@@ -1,5 +1,4 @@
-// Package generation lets chat admins switch classic/simplified modes and bot
-// owners switch neural mode for a chat.
+// Package generation lets chat admins switch classic/simplified Markov modes.
 package generation
 
 import (
@@ -44,8 +43,8 @@ func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 	case generationUnknown:
 		telegram.Reply(ctx, b, update, locale.T(lang, "generation.unknown", "list", modes), "")
 	case generationSet:
-		if !allowedToSet(ctx, b, chat.ID, userID, mode) {
-			telegram.Reply(ctx, b, update, locale.T(lang, permissionKey(mode)), "")
+		if !utils.IsChatAdmin(ctx, b, chat.ID, userID) {
+			telegram.Reply(ctx, b, update, locale.T(lang, "common.not_admin"), "")
 			return
 		}
 		if err := models.Chats.SetGenerationMode(ctx, chat.ID, mode); err != nil {
@@ -54,26 +53,6 @@ func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 		}
 		telegram.Reply(ctx, b, update, locale.T(lang, "generation.set", "mode", mode.String()), "")
 	}
-}
-
-// requiresOwner reports whether enabling the mode is restricted to bot owners.
-// Neural mode is owner-only; classic/simplified are available to chat admins.
-func requiresOwner(mode models.GenerationMode) bool {
-	return mode == models.GenerationModeNeural
-}
-
-func allowedToSet(ctx context.Context, b *bot.Bot, chatID, userID int64, mode models.GenerationMode) bool {
-	if requiresOwner(mode) {
-		return app.IsOwner(userID)
-	}
-	return utils.IsChatAdmin(ctx, b, chatID, userID)
-}
-
-func permissionKey(mode models.GenerationMode) string {
-	if requiresOwner(mode) {
-		return "common.not_owner"
-	}
-	return "common.not_admin"
 }
 
 type generationAction int

@@ -12,10 +12,12 @@ WARNING: neuroslop ahead (Opus and Composer are used).
 
 - Every incoming message first ensures the chat, user and participation rows
   exist (one transaction), then learning/scoring happens in background goroutines.
-- Generation has switchable per-chat modes via `/generation`:
+- Generation has switchable per-chat Markov modes via `/generation`:
   - `classic` — trigram Markov walk (pair of words → reply); chat admins may set.
   - `simplified` — bigram walk (only the second word seeds the next reply; more nonsensical); chat admins may set.
-  - `neural` — OpenAI-compatible LLM replies with classic fallback; bot owners only.
+- When `neural.reply` providers are configured, every reply first tries an
+  OpenAI-compatible LLM; on failure (unavailable, error, or no slots) it falls
+  back to the chat's Markov mode (`classic` or `simplified`).
 - The Markov "context" for `/cool_story` and reply fallback is derived from the
   most recent messages stored per chat (byte budget = max `context_size` across
   `neural.reply` providers, or 16 KiB when no reply providers are configured).
@@ -44,13 +46,13 @@ and [`build/dev/config.yaml-example`](build/dev/config.yaml-example) for local d
 | `database` | `*` | — | Postgres host/port/name/user/password |
 | `app` | `generation_mode` | `classic` | Default mode for new chats |
 | `app` | `winner_cron` | `20 4 * * *` | Daily winner draw (04:20) |
-| `app` | `memory_cron` | `0 */6 * * *` | Neural memory summarization (messages since last `memory_summarized_at`) |
+| `app` | `memory_cron` | `0 */6 * * *` | Memory summarization for all active chats (messages since last `memory_summarized_at`) |
 | `app` | `allow_to_all` | `false` | Reply in all chats without `/start` |
 | `app` | `app_prompt` / `summary_prompt` | see example | Neural system / memory prompts |
 | `telegram` | `webhook_url` | — | Webhook mode URL; empty = long polling (`deleteWebhook` on startup) |
 | `telegram` | `webhook_secret_token` | — | Secret for webhook requests (`setWebhook` + header check); auto-generated in webhook mode if omitted |
 | `sentry` | `dsn` | — | Enables Sentry when set |
-| `neural` | `reply` / `summary` | — | Provider fallback chains for neural mode |
+| `neural` | `reply` / `summary` | — | Provider fallback chains for LLM replies and memory summarization |
 | `neural.*` | `context_size` | — | Per-model UTF-8 byte budget for API payload; max across `reply` caps DB history; max across `summary` caps memory input |
 
 Pass `-config path/to/config.yaml` if the file is not named `config.yaml`.

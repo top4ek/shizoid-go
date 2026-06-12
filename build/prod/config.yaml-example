@@ -30,7 +30,7 @@ app:
   idle_cron: "40 19 * * *"
   memory_cron: "0 */6 * * *"
 
-# Optional neural provider chains for /generation neural mode.
+# Optional neural provider chains for LLM replies and memory summarization.
 # neural:
 #   reply:
 #     - name: openrouter
