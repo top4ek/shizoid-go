@@ -48,7 +48,8 @@ and [`build/dev/config.yaml-example`](build/dev/config.yaml-example) for local d
 | `app` | `summary_window_hours` | `6` | Messages included in each memory pass |
 | `app` | `allow_to_all` | `false` | Reply in all chats without `/start` |
 | `app` | `app_prompt` / `summary_prompt` | see example | Neural system / memory prompts |
-| `telegram` | `webhook_url` | — | Set to run in webhook mode (else long polling) |
+| `telegram` | `webhook_url` | — | Webhook mode URL; empty = long polling (`deleteWebhook` on startup) |
+| `telegram` | `webhook_secret_token` | — | Secret for webhook requests (`setWebhook` + header check); auto-generated in webhook mode if omitted |
 | `sentry` | `dsn` | — | Enables Sentry when set |
 | `neural` | `reply` / `summary` | — | Provider fallback chains for neural mode |
 | `neural.*` | `context_size` | — | Per-model UTF-8 byte budget for API payload; max across `reply` also caps DB history |
@@ -79,6 +80,9 @@ Then open your group chat in Telegram and send `/start` to activate the bot.
 
 **Webhook mode:** set `telegram.webhook_url` in `config.yaml`, expose `app.bind_to`
 (default `8095`) on the host, and add a `ports` mapping to `docker-compose.yaml`.
+On startup the bot calls Telegram `setWebhook` with that URL and a
+`webhook_secret_token` (auto-generated if omitted). With an empty `webhook_url` it calls `deleteWebhook`
+and runs long polling.
 
 **Update to a new version:**
 

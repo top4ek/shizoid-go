@@ -20,6 +20,7 @@ import (
 	"shizoid/internal/models"
 	"shizoid/internal/scheduler"
 	"shizoid/internal/sentry"
+	"shizoid/internal/telegram"
 )
 
 func main() {
@@ -53,6 +54,10 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
+	if err := telegram.EnsureWebhookSecret(); err != nil {
+		logger.Instance().Fatal("webhook secret token", zap.Error(err))
+	}
+
 	options := []bot.Option{
 		bot.WithDefaultHandler(handlers.DefaultHandler),
 		bot.WithMiddlewares(sentry.Recover, handlers.LogUpdate, handlers.Ingest),
@@ -75,6 +80,10 @@ func main() {
 		if id := botInstance.ID(); id != 0 {
 			app.SetBotID(id)
 		}
+	}
+
+	if err := telegram.ConfigureDelivery(ctx, botInstance); err != nil {
+		logger.Instance().Fatal("telegram delivery mode", zap.Error(err))
 	}
 
 	handlers.RegisterHandlers(ctx, botInstance)
