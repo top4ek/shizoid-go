@@ -27,25 +27,6 @@ func TestEndsSentence(t *testing.T) {
 	assert.False(t, endsSentence(""))
 }
 
-func TestStorySeparatorAfter(t *testing.T) {
-	assert.Equal(t, ". ", storySeparatorAfter("Один"))
-	assert.Equal(t, " ", storySeparatorAfter("Конец."))
-	assert.Equal(t, " ", storySeparatorAfter("Что?"))
-	assert.Equal(t, " ", storySeparatorAfter("Ого!"))
-	assert.Equal(t, " ", storySeparatorAfter("Ну…"))
-}
-
-func TestJoinStorySentences(t *testing.T) {
-	assert.Equal(t, "", joinStorySentences(nil))
-	assert.Equal(t, "", joinStorySentences([]string{}))
-	assert.Equal(t, "Один", joinStorySentences([]string{"Один"}))
-	assert.Equal(t, "Один. Два", joinStorySentences([]string{"Один", "Два"}))
-	assert.Equal(t, "Уже! Два", joinStorySentences([]string{"Уже!", "Два"}))
-	assert.Equal(t, "Что? Дальше", joinStorySentences([]string{"Что?", "Дальше"}))
-	assert.Equal(t, "Один. Два. Три", joinStorySentences([]string{"Один", "Два", "Три"}))
-	assert.Equal(t, "Первое. Уже! Третье", joinStorySentences([]string{"Первое", "Уже!", "Третье"}))
-}
-
 func TestPickReplyEmpty(t *testing.T) {
 	assert.Nil(t, pickReply(nil))
 }
@@ -119,12 +100,6 @@ func TestNormalizeRoleAlternation(t *testing.T) {
 	assert.Equal(t, ".", got[1].Text)
 	assert.Equal(t, "user", got[2].Role)
 	assert.Equal(t, "c\n\nd", got[3].Text)
-}
-
-func TestTruncateRunes(t *testing.T) {
-	assert.Equal(t, "", truncateRunes("привет", 0))
-	assert.Equal(t, "привет", truncateRunes("привет", 10))
-	assert.Equal(t, "при", truncateRunes("привет", 3))
 }
 
 func TestPickReplyWithinPool(t *testing.T) {

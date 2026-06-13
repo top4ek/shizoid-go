@@ -18,7 +18,6 @@ import (
 
 const (
 	safetyCounter = 50
-	maxStoryRunes = 1024
 )
 
 var sentenceEnders = map[rune]struct{}{'.': {}, '!': {}, '?': {}, '…': {}}
@@ -71,42 +70,6 @@ func (g *Generator) Reply(ctx context.Context, chat *models.Chat, words []string
 		return "", err
 	}
 	return g.buildSentence(ctx, chat, contextIDs)
-}
-
-func (g *Generator) Story(ctx context.Context, chat *models.Chat) (string, error) {
-	contextIDs, err := g.contextIDs(ctx, chat)
-	if err != nil {
-		return "", err
-	}
-	if len(contextIDs) == 0 {
-		return "", nil
-	}
-	seen := make(map[string]struct{})
-	var sentences []string
-	var storyLen int
-	for range contextIDs {
-		s, err := g.buildSentence(ctx, chat, contextIDs)
-		if err != nil {
-			return "", err
-		}
-		if s == "" {
-			continue
-		}
-		if _, ok := seen[s]; ok {
-			continue
-		}
-		add := len([]rune(s))
-		if len(sentences) > 0 {
-			add += len([]rune(storySeparatorAfter(sentences[len(sentences)-1])))
-		}
-		if storyLen+add > maxStoryRunes {
-			break
-		}
-		seen[s] = struct{}{}
-		sentences = append(sentences, s)
-		storyLen += add
-	}
-	return truncateRunes(joinStorySentences(sentences), maxStoryRunes), nil
 }
 
 func (g *Generator) Learn(ctx context.Context, chatID int64, text string) error {
@@ -398,26 +361,6 @@ func endsSentence(token string) bool {
 	return ok
 }
 
-func storySeparatorAfter(prev string) string {
-	if endsSentence(prev) {
-		return " "
-	}
-	return ". "
-}
-
-func joinStorySentences(sentences []string) string {
-	if len(sentences) == 0 {
-		return ""
-	}
-	var b strings.Builder
-	b.WriteString(sentences[0])
-	for i := 1; i < len(sentences); i++ {
-		b.WriteString(storySeparatorAfter(sentences[i-1]))
-		b.WriteString(sentences[i])
-	}
-	return b.String()
-}
-
 func at(s []sql.NullInt64, i int) sql.NullInt64 {
 	if i < len(s) {
 		return s[i]
@@ -432,15 +375,4 @@ func capitalize(s string) string {
 	r := []rune(s)
 	r[0] = unicode.ToUpper(r[0])
 	return string(r)
-}
-
-func truncateRunes(s string, max int) string {
-	if max <= 0 {
-		return ""
-	}
-	r := []rune(s)
-	if len(r) <= max {
-		return s
-	}
-	return string(r[:max])
 }
