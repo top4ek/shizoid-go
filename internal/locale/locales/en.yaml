@@ -137,12 +137,6 @@ en:
       - Definitely the second.
       - The second option.
 
-  cool_story:
-    lazy:
-      - "Kinda lazy :("
-      - Nothing comes to my processor.
-      - Not in the mood.
-
   text:
     anchors:
       - shizik

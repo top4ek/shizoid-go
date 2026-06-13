@@ -12,7 +12,6 @@ import (
 	"shizoid/internal/utils"
 
 	"shizoid/internal/handlers/captcha"
-	"shizoid/internal/handlers/cool_story"
 	"shizoid/internal/handlers/eightball"
 	"shizoid/internal/handlers/gab"
 	"shizoid/internal/handlers/generation"
@@ -40,7 +39,6 @@ type command struct {
 
 func commands() []command {
 	return []command{
-		{cool_story.Command, cool_story.Description, cool_story.HandlerType, cool_story.MatchType, cool_story.Handler},
 		{eightball.Command, eightball.Description, eightball.HandlerType, eightball.MatchType, eightball.Handler},
 		{gab.Command, gab.Description, gab.HandlerType, gab.MatchType, gab.Handler},
 		{generation.Command, generation.Description, generation.HandlerType, generation.MatchType, generation.Handler},

@@ -18,7 +18,7 @@ WARNING: neuroslop ahead (Opus and Composer are used).
 - When `neural.reply` providers are configured, every reply first tries an
   OpenAI-compatible LLM; on failure (unavailable, error, or no slots) it falls
   back to the chat's Markov mode (`classic` or `simplified`).
-- The Markov "context" for `/cool_story` and reply fallback is derived from the
+- The Markov "context" for reply fallback is derived from the
   most recent messages stored per chat (byte budget = max `context_size` across
   `neural.reply` providers, or 16 KiB when no reply providers are configured).
 
