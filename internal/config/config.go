@@ -52,12 +52,12 @@ type app_config struct {
 	BindTo         int16   `yaml:"bind_to" env:"BIND_TO" env-default:"3000"`
 	Locale         string  `yaml:"locale" env:"LOCALE" env-default:"ru"`
 	GenerationMode string  `yaml:"generation_mode" env:"GENERATION_MODE" env-default:"classic"`
-	WinnerCron     string  `yaml:"winner_cron" env:"WINNER_CRON" env-default:"20 4 * * *"`
-	IdleCron       string  `yaml:"idle_cron" env:"IDLE_CRON" env-default:"40 19 * * *"`
+	WinnerCron     string  `yaml:"winner_cron" env:"WINNER_CRON" env-default:"20 1 * * *"`
+	IdleCron       string  `yaml:"idle_cron" env:"IDLE_CRON" env-default:"40 16 * * *"`
 	CaptchaCron    string  `yaml:"captcha_cron" env:"CAPTCHA_CRON" env-default:"@every 1m"`
 
 	AppPrompt     string `yaml:"app_prompt" env:"APP_PROMPT"`
-	MemoryCron    string `yaml:"memory_cron" env:"MEMORY_CRON" env-default:"0 */6 * * *"`
+	MemoryCron    string `yaml:"memory_cron" env:"MEMORY_CRON" env-default:"0 */3 * * *"`
 	SummaryPrompt string `yaml:"summary_prompt" env:"SUMMARY_PROMPT"`
 }
 
