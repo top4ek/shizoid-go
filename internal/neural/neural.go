@@ -103,6 +103,12 @@ type chatRequest struct {
 	Model              string         `json:"model"`
 	Messages           []chatMessage  `json:"messages"`
 	Stream             bool           `json:"stream"`
+	Temperature        *float64       `json:"temperature,omitempty"`
+	TopP               *float64       `json:"top_p,omitempty"`
+	TopK               *int           `json:"top_k,omitempty"`
+	MinP               *float64       `json:"min_p,omitempty"`
+	PresencePenalty    *float64       `json:"presence_penalty,omitempty"`
+	RepeatPenalty      *float64       `json:"repeat_penalty,omitempty"`
 	ChatTemplateKwargs map[string]any `json:"chat_template_kwargs,omitempty"`
 }
 
@@ -314,11 +320,13 @@ func (c *Client) call(ctx context.Context, p Provider, messages []chatMessage) (
 	reqCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	body, err := json.Marshal(chatRequest{
+	reqBody := chatRequest{
 		Model:              p.Model,
 		Messages:           messages,
 		ChatTemplateKwargs: map[string]any{"enable_thinking": false},
-	})
+	}
+	applySampling(p, &reqBody)
+	body, err := json.Marshal(reqBody)
 	if err != nil {
 		return "", err
 	}
@@ -420,6 +428,19 @@ func (c *Client) checkSlots(ctx context.Context, p Provider) error {
 		return fmt.Errorf("neural: %s health returned status %d", p.Name, resp.StatusCode)
 	}
 	return nil
+}
+
+func applySampling(p Provider, req *chatRequest) {
+	if p.Sampling == nil {
+		return
+	}
+	s := p.Sampling
+	req.Temperature = &s.Temperature
+	req.TopP = &s.TopP
+	req.TopK = &s.TopK
+	req.MinP = &s.MinP
+	req.PresencePenalty = &s.PresencePenalty
+	req.RepeatPenalty = &s.RepetitionPenalty
 }
 
 // serverRoot strips the OpenAI /v1 prefix from a provider base URL.

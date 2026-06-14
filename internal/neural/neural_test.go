@@ -105,6 +105,52 @@ func TestReplyBuildsStructuredMessages(t *testing.T) {
 	assert.Equal(t, "hello", got.Messages[1].Content[0].Text)
 	require.NotNil(t, got.ChatTemplateKwargs)
 	assert.Equal(t, false, got.ChatTemplateKwargs["enable_thinking"])
+	assert.Nil(t, got.Temperature)
+}
+
+func TestCallAppliesSamplingParams(t *testing.T) {
+	var got chatRequest
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		require.NoError(t, json.Unmarshal(body, &got))
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"ok"}}]}`))
+	}))
+	defer srv.Close()
+
+	c := &Client{
+		http: http.DefaultClient,
+		reply: []Provider{{
+			Name:           "local",
+			BaseURL:        srv.URL + "/v1",
+			Model:          "m",
+			TimeoutSeconds: 5,
+			Sampling: &SamplingParams{
+				Temperature:       0.7,
+				TopP:              0.8,
+				TopK:              20,
+				MinP:              0.0,
+				PresencePenalty:   1.5,
+				RepetitionPenalty: 1.0,
+			},
+		}},
+	}
+	_, err := c.Reply(context.Background(), "sys", "hello")
+	require.NoError(t, err)
+
+	require.NotNil(t, got.Temperature)
+	assert.Equal(t, 0.7, *got.Temperature)
+	require.NotNil(t, got.TopP)
+	assert.Equal(t, 0.8, *got.TopP)
+	require.NotNil(t, got.TopK)
+	assert.Equal(t, 20, *got.TopK)
+	require.NotNil(t, got.MinP)
+	assert.Equal(t, 0.0, *got.MinP)
+	require.NotNil(t, got.PresencePenalty)
+	assert.Equal(t, 1.5, *got.PresencePenalty)
+	require.NotNil(t, got.RepeatPenalty)
+	assert.Equal(t, 1.0, *got.RepeatPenalty)
 }
 
 func TestReplyWithHistoryIncludesName(t *testing.T) {
