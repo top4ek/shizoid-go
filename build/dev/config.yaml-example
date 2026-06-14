@@ -26,10 +26,10 @@ app:
   bind_to: 3000
   locale: ru
   generation_mode: classic
-  winner_cron: "20 4 * * *"
-  idle_cron: "40 19 * * *"
+  winner_cron: "20 1 * * *"
+  idle_cron: "40 16 * * *"
   # app_prompt: override the default system prompt for neural replies
-  memory_cron: "0 */6 * * *"
+  memory_cron: "0 */3 * * *"
   # summary_prompt: override the default memory summarization instructions
 
 # Neural provider fallback chains. Each list is tried top to bottom until a
@@ -39,7 +39,7 @@ neural:
     - name: openrouter
       base_url: https://openrouter.ai/api/v1
       api_key: sk-or-v1-...
-      model: google/gemma-3-4b-it
+      model: "openrouter/free"
       context_size: 32000
       timeout_seconds: 60
       daily_limit: 500
@@ -49,15 +49,29 @@ neural:
       context_size: 8192
       timeout_seconds: 25
       slot_check: true
+      sampling:
+        temperature: 0.7
+        top_p: 0.8
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 1.5
+        repetition_penalty: 1.0
   summary:
-    # - name: openrouter
-    #   base_url: https://openrouter.ai/api/v1
-    #   api_key: sk-or-v1-...
-    #   model: google/gemma-3-4b-it
-    #   timeout_seconds: 120
+    - name: openrouter
+      base_url: https://openrouter.ai/api/v1
+      api_key: sk-or-v1-...
+      model: "openrouter/free"
+      timeout_seconds: 120
     - name: local
       base_url: http://llama:3110/v1
       model: Qwen3-1.7B-Q4_K_M.gguf
       context_size: 8192
       timeout_seconds: 120
       slot_check: true
+      sampling:
+        temperature: 1.0
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 1.5
+        repetition_penalty: 1.0

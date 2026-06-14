@@ -54,6 +54,7 @@ and [`build/dev/config.yaml-example`](build/dev/config.yaml-example) for local d
 | `sentry` | `dsn` | — | Enables Sentry when set |
 | `neural` | `reply` / `summary` | — | Provider fallback chains for LLM replies and memory summarization |
 | `neural.*` | `context_size` | — | Per-model UTF-8 byte budget for API payload; max across `reply` caps DB history; max across `summary` caps memory input |
+| `neural.*` | `sampling` | — | Optional chat/completions sampling (`temperature`, `top_p`, `top_k`, `min_p`, `presence_penalty`, `repetition_penalty`; sent as `repeat_penalty` to llama.cpp) |
 
 Pass `-config path/to/config.yaml` if the file is not named `config.yaml`.
 
