@@ -3,6 +3,7 @@ package generator
 import (
 	"database/sql"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -46,6 +47,18 @@ func TestBuildNeuralSystem(t *testing.T) {
 
 	empty := g.buildNeuralSystem(&models.Chat{})
 	assert.Equal(t, "Ты дружелюбный бот.", empty)
+}
+
+func TestHistorySince(t *testing.T) {
+	since := time.Date(2026, 3, 15, 12, 0, 0, 0, time.UTC)
+
+	got, ok := historySince(&models.Chat{})
+	assert.False(t, ok)
+	assert.True(t, got.IsZero())
+
+	got, ok = historySince(&models.Chat{MemorySummarizedAt: sql.NullTime{Time: since, Valid: true}})
+	assert.True(t, ok)
+	assert.Equal(t, since, got)
 }
 
 func TestBuildNeuralHistory(t *testing.T) {

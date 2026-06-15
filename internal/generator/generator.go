@@ -6,6 +6,7 @@ import (
 	"math/rand/v2"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
 	"go.uber.org/zap"
@@ -252,11 +253,24 @@ func (g *Generator) neuralHistory(ctx context.Context, chat *models.Chat, curren
 	if config.MaxReplyContextBytes <= 0 {
 		return appendCurrentMessage(nil, currentUser, currentUserID, 0)
 	}
-	rows, err := models.Messages.RecentByBytes(ctx, chat.ID, config.MaxReplyContextBytes)
+	var rows []models.MessageRow
+	var err error
+	if since, ok := historySince(chat); ok {
+		rows, err = models.Messages.RecentByBytesSince(ctx, chat.ID, since, config.MaxReplyContextBytes)
+	} else {
+		rows, err = models.Messages.RecentByBytes(ctx, chat.ID, config.MaxReplyContextBytes)
+	}
 	if err != nil {
 		return appendCurrentMessage(nil, currentUser, currentUserID, 0)
 	}
 	return buildNeuralHistory(rows, g.botID, currentUser, currentUserID)
+}
+
+func historySince(chat *models.Chat) (time.Time, bool) {
+	if chat.MemorySummarizedAt.Valid {
+		return chat.MemorySummarizedAt.Time, true
+	}
+	return time.Time{}, false
 }
 
 func buildNeuralHistory(rows []models.MessageRow, botID int64, currentUser string, currentUserID int64) []neural.HistoryMessage {
