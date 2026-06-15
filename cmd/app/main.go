@@ -25,12 +25,21 @@ import (
 )
 
 func main() {
-	configPath := flag.String("config", "config.yaml", "path to config file")
-	migrateOnly := flag.Bool("migrate-only", false, "run database migrations and exit")
-	flag.Parse()
+	if err := run(os.Args[1:]); err != nil {
+		panic(err)
+	}
+}
+
+func run(args []string) error {
+	fs := flag.NewFlagSet("shizoid", flag.ContinueOnError)
+	configPath := fs.String("config", "config.yaml", "path to config file")
+	migrateOnly := fs.Bool("migrate-only", false, "run database migrations and exit")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
 
 	if err := config.Load(*configPath); err != nil {
-		panic(err)
+		return err
 	}
 	logger.Init(config.Development(), config.LogLevel())
 
@@ -51,7 +60,7 @@ func main() {
 	}
 	if *migrateOnly {
 		logger.Instance().Info("migrations applied")
-		return
+		return nil
 	}
 
 	sentry.Init()
@@ -129,4 +138,5 @@ func main() {
 			logger.Instance().Info("webhook server stopped")
 		}
 	}
+	return nil
 }
