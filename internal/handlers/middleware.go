@@ -48,6 +48,16 @@ func updateLogFields(update *tgmodels.Update) []zap.Field {
 			zap.String("data", update.CallbackQuery.Data),
 		)
 	}
+	if cm := update.ChatMember; cm != nil {
+		fields = append(fields,
+			zap.Int64("chat_id", cm.Chat.ID),
+			zap.String("old_status", string(cm.OldChatMember.Type)),
+			zap.String("new_status", string(cm.NewChatMember.Type)),
+		)
+		if u, ok := memberUser(cm.NewChatMember); ok {
+			fields = append(fields, zap.Int64("user_id", u.ID))
+		}
+	}
 	return fields
 }
 
@@ -102,20 +112,30 @@ func updateMessage(update *tgmodels.Update) *tgmodels.Message {
 
 func Ingest(next bot.HandlerFunc) bot.HandlerFunc {
 	return func(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
+		if !app.Ready() {
+			next(ctx, b, update)
+			return
+		}
+
+		if cm := update.ChatMember; cm != nil {
+			if isJoinTransition(cm.OldChatMember, cm.NewChatMember) {
+				if user, ok := memberUser(cm.NewChatMember); ok && !user.IsBot {
+					ingestJoin(ctx, b, update, chatModelFromChat(cm.Chat), []tgmodels.User{*user}, "chat_member", next)
+					return
+				}
+			}
+			next(ctx, b, update)
+			return
+		}
+
 		msg := update.Message
-		if msg == nil || !app.Ready() {
+		if msg == nil {
 			next(ctx, b, update)
 			return
 		}
 
 		if len(msg.NewChatMembers) > 0 {
-			persisted, err := models.Ingest.EnsureJoin(ctx, chatModel(msg), msg.NewChatMembers)
-			if err != nil {
-				logger.Instance().Error("ingest join", zap.Error(err))
-			} else if persisted != nil {
-				ctx = app.WithChat(ctx, persisted)
-			}
-			next(ctx, b, update)
+			ingestJoin(ctx, b, update, chatModel(msg), msg.NewChatMembers, "new_chat_members", next)
 			return
 		}
 
@@ -145,6 +165,21 @@ func Ingest(next bot.HandlerFunc) bot.HandlerFunc {
 
 		next(ctx, b, update)
 	}
+}
+
+func ingestJoin(ctx context.Context, b *bot.Bot, update *tgmodels.Update, chat *models.Chat, members []tgmodels.User, source string, next bot.HandlerFunc) {
+	logger.Instance().Debug("ingest join",
+		zap.String("source", source),
+		zap.Int64("chat_id", chat.ID),
+		zap.Int("members_count", len(members)),
+	)
+	persisted, err := models.Ingest.EnsureJoin(ctx, chat, members)
+	if err != nil {
+		logger.Instance().Error("ingest join", zap.String("source", source), zap.Error(err))
+	} else if persisted != nil {
+		ctx = app.WithChat(ctx, persisted)
+	}
+	next(ctx, b, update)
 }
 
 func runCollectStats(chat *models.Chat, msg *tgmodels.Message) {
@@ -186,17 +221,21 @@ func collectStats(chat *models.Chat, msg *tgmodels.Message) {
 }
 
 func chatModel(msg *tgmodels.Message) *models.Chat {
-	c := &models.Chat{
-		ID:             msg.Chat.ID,
-		Kind:           string(msg.Chat.Type),
+	return chatModelFromChat(msg.Chat)
+}
+
+func chatModelFromChat(c tgmodels.Chat) *models.Chat {
+	out := &models.Chat{
+		ID:             c.ID,
+		Kind:           string(c.Type),
 		Locale:         defaultLocale(),
 		GenerationMode: config.DefaultGenerationMode,
 	}
-	c.Title = nullString(msg.Chat.Title)
-	c.FirstName = nullString(msg.Chat.FirstName)
-	c.LastName = nullString(msg.Chat.LastName)
-	c.Username = nullString(msg.Chat.Username)
-	return c
+	out.Title = nullString(c.Title)
+	out.FirstName = nullString(c.FirstName)
+	out.LastName = nullString(c.LastName)
+	out.Username = nullString(c.Username)
+	return out
 }
 
 func userModel(u *tgmodels.User) *models.User {

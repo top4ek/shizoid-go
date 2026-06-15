@@ -81,6 +81,10 @@ func RegisterHandlers(ctx context.Context, b *bot.Bot) {
 
 	b.RegisterHandler(captcha.CallbackType, captcha.CallbackPrefix, captcha.CallbackMatch, captcha.Callback)
 
+	b.RegisterHandlerMatchFunc(func(update *models.Update) bool {
+		return update.ChatMember != nil
+	}, ChatMemberHandler)
+
 	if _, err := b.SetMyCommands(ctx, &bot.SetMyCommandsParams{
 		Commands: botCommands,
 		Scope:    &models.BotCommandScopeDefault{},

@@ -8,18 +8,18 @@ import (
 
 // Participation represents the participations table (a user in a chat).
 type Participation struct {
-	ID              int64        `db:"id"`
-	ChatID          int64        `db:"chat_id"`
-	UserID          int64        `db:"user_id"`
-	LeftAt          sql.NullTime `db:"left_at"`
-	Score           int          `db:"score"`
-	ActiveAt        sql.NullTime `db:"active_at"`
-	CaptchaSolvedAt      sql.NullTime   `db:"captcha_solved_at"`
-	CaptchaRequestedAt   sql.NullTime   `db:"captcha_requested_at"`
-	CaptchaCorrectEmoji  sql.NullString `db:"captcha_correct_emoji"`
-	CaptchaMessageID     sql.NullInt64  `db:"captcha_message_id"`
-	CreatedAt            time.Time      `db:"created_at"`
-	UpdatedAt       time.Time    `db:"updated_at"`
+	ID                  int64          `db:"id"`
+	ChatID              int64          `db:"chat_id"`
+	UserID              int64          `db:"user_id"`
+	LeftAt              sql.NullTime   `db:"left_at"`
+	Score               int            `db:"score"`
+	ActiveAt            sql.NullTime   `db:"active_at"`
+	CaptchaSolvedAt     sql.NullTime   `db:"captcha_solved_at"`
+	CaptchaRequestedAt  sql.NullTime   `db:"captcha_requested_at"`
+	CaptchaCorrectEmoji sql.NullString `db:"captcha_correct_emoji"`
+	CaptchaMessageID    sql.NullInt64  `db:"captcha_message_id"`
+	CreatedAt           time.Time      `db:"created_at"`
+	UpdatedAt           time.Time      `db:"updated_at"`
 }
 
 type participations struct{}
@@ -129,6 +129,36 @@ func (participations) GetCaptchaPending(ctx context.Context, chatID, userID int6
 		id = int(msgID.Int64)
 	}
 	return emoji.String, id, true, nil
+}
+
+func (participations) TryClaimCaptcha(ctx context.Context, chatID, userID int64) (bool, error) {
+	res, err := db.ExecContext(ctx, `
+		UPDATE participations SET captcha_requested_at = NOW(), updated_at = NOW()
+		WHERE chat_id = $1 AND user_id = $2
+		  AND captcha_solved_at IS NULL
+		  AND captcha_requested_at IS NULL`,
+		chatID, userID)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return n == 1, nil
+}
+
+func (participations) SetCaptchaDetails(ctx context.Context, chatID, userID int64, emoji string, messageID int) error {
+	_, err := db.ExecContext(ctx, `
+		UPDATE participations SET
+			captcha_correct_emoji = $3,
+			captcha_message_id = $4,
+			updated_at = NOW()
+		WHERE chat_id = $1 AND user_id = $2
+		  AND captcha_requested_at IS NOT NULL
+		  AND captcha_solved_at IS NULL`,
+		chatID, userID, emoji, messageID)
+	return err
 }
 
 func (participations) StartCaptcha(ctx context.Context, chatID, userID int64, emoji string, messageID int) error {
