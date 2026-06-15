@@ -371,14 +371,24 @@ func (c *Client) call(ctx context.Context, p Provider, messages []chatMessage) (
 		)
 		return "", fmt.Errorf("neural: %s returned status %d", p.Name, resp.StatusCode)
 	}
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
 	var parsed chatResponse
-	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
+	if err := json.Unmarshal(respBody, &parsed); err != nil {
 		return "", err
 	}
 	if len(parsed.Choices) == 0 {
 		return "", fmt.Errorf("neural: %s returned no choices", p.Name)
 	}
-	out := stripThinking(messageText(parsed.Choices[0].Message.Content))
+	raw := messageText(parsed.Choices[0].Message.Content)
+	log.Debug("neural response payload",
+		zap.String("provider", p.Name),
+		zap.String("body", string(respBody)),
+		zap.String("text", raw),
+	)
+	out := stripThinking(raw)
 	log.Info("neural response",
 		zap.String("provider", p.Name),
 		zap.String("model", p.Model),
