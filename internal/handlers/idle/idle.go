@@ -1,4 +1,4 @@
-// Package idle configures poking inactive chats after N days of silence.
+// Package idle configures daily questions about inactive chat members.
 package idle
 
 import (
@@ -21,7 +21,7 @@ import (
 
 const (
 	Command     = "idle"
-	Description = "Poke the chat after N days of silence"
+	Description = "Ask about silent members once a day"
 	HandlerType = bot.HandlerTypeMessageText
 	MatchType   = bot.MatchTypeCommand
 )

@@ -120,6 +120,7 @@ telegram:
 	assert.Equal(t, "production", Sentry.Environment)
 	assert.NotEmpty(t, Environment.AppPrompt)
 	assert.NotEmpty(t, Environment.SummaryPrompt)
+	assert.NotEmpty(t, Environment.IdlePrompt)
 }
 
 func TestLoadRequiresToken(t *testing.T) {

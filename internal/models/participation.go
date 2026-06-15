@@ -35,6 +35,13 @@ type ScoreEntry struct {
 	Score    int
 }
 
+// MemberInfo is a chat participant with display fields for mentions.
+type MemberInfo struct {
+	UserID   int64
+	Username string
+	Name     string
+}
+
 // CaptchaPending is an active captcha challenge past its deadline.
 type CaptchaPending struct {
 	ChatID    int64
@@ -226,6 +233,59 @@ func (participations) ExpiredPending(ctx context.Context, timeout time.Duration)
 			p.MessageID = int(msgID.Int64)
 		}
 		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+func scanMemberInfo(row interface{ Scan(...any) error }) (MemberInfo, error) {
+	var m MemberInfo
+	err := row.Scan(&m.UserID, &m.Username, &m.Name)
+	return m, err
+}
+
+func (participations) InactiveSince(ctx context.Context, chatID int64, days int) ([]MemberInfo, error) {
+	const q = `
+		SELECT p.user_id,
+			COALESCE(u.username, ''),
+			COALESCE(NULLIF(u.username, ''), NULLIF(u.first_name, ''), NULLIF(u.last_name, ''), '') AS name
+		FROM participations p
+		JOIN users u ON u.id = p.user_id
+		WHERE p.chat_id = $1
+		  AND p.left_at IS NULL
+		  AND COALESCE(u.is_bot, false) = false
+		  AND (p.active_at IS NULL OR p.active_at < NOW() - ($2 || ' days')::interval)
+		ORDER BY p.user_id`
+	return queryMembers(ctx, q, chatID, days)
+}
+
+func (participations) ActiveSince(ctx context.Context, chatID int64, days int) ([]MemberInfo, error) {
+	const q = `
+		SELECT p.user_id,
+			COALESCE(u.username, ''),
+			COALESCE(NULLIF(u.username, ''), NULLIF(u.first_name, ''), NULLIF(u.last_name, ''), '') AS name
+		FROM participations p
+		JOIN users u ON u.id = p.user_id
+		WHERE p.chat_id = $1
+		  AND p.left_at IS NULL
+		  AND COALESCE(u.is_bot, false) = false
+		  AND p.active_at >= NOW() - ($2 || ' days')::interval
+		ORDER BY p.user_id`
+	return queryMembers(ctx, q, chatID, days)
+}
+
+func queryMembers(ctx context.Context, q string, chatID int64, days int) ([]MemberInfo, error) {
+	rows, err := db.QueryContext(ctx, q, chatID, days)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []MemberInfo
+	for rows.Next() {
+		m, err := scanMemberInfo(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, m)
 	}
 	return out, rows.Err()
 }

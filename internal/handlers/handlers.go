@@ -16,7 +16,7 @@ import (
 	"shizoid/internal/handlers/gab"
 	"shizoid/internal/handlers/generation"
 	"shizoid/internal/handlers/greeting"
-	// "shizoid/internal/handlers/idle" // TODO: re-enable when poke logic is ready
+	"shizoid/internal/handlers/idle"
 	"shizoid/internal/handlers/ids"
 	"shizoid/internal/handlers/lang"
 	"shizoid/internal/handlers/me"
@@ -43,7 +43,7 @@ func commands() []command {
 		{gab.Command, gab.Description, gab.HandlerType, gab.MatchType, gab.Handler},
 		{generation.Command, generation.Description, generation.HandlerType, generation.MatchType, generation.Handler},
 		{greeting.Command, greeting.Description, greeting.HandlerType, greeting.MatchType, greeting.Handler},
-		// {idle.Command, idle.Description, idle.HandlerType, idle.MatchType, idle.Handler}, // TODO: re-enable when poke logic is ready
+		{idle.Command, idle.Description, idle.HandlerType, idle.MatchType, idle.Handler},
 		{ids.Command, ids.Description, ids.HandlerType, ids.MatchType, ids.Handler},
 		{lang.Command, lang.Description, lang.HandlerType, lang.MatchType, lang.Handler},
 		{me.Command, me.Description, me.HandlerType, me.MatchType, me.Handler},

@@ -26,7 +26,8 @@ app:
   locale: ru
   generation_mode: classic
   winner_cron: "20 1 * * *"
-  idle_cron: "40 16 * * *"
+  idle_cron: "0 * * * *" # poll hourly; 9:00–21:00 UTC window enforced in code
+  # idle_prompt: override the default prompt for daily idle questions
   memory_cron: "0 */6 * * *"
 
 neural:

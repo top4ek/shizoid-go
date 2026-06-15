@@ -18,6 +18,7 @@ import (
 	"shizoid/internal/app"
 	"shizoid/internal/config"
 	"shizoid/internal/handlers/captcha"
+	"shizoid/internal/handlers/idle"
 	"shizoid/internal/handlers/winner"
 	"shizoid/internal/locale"
 	"shizoid/internal/logger"
@@ -25,16 +26,16 @@ import (
 )
 
 // Start configures and launches the cron jobs. The returned Cron should be
-// stopped on shutdown.
+// stopped on shutdown. Idle UTC window (9–20) is enforced inside idle.PokeChat.
 func Start(b *bot.Bot) *cron.Cron {
 	c := cron.New(cron.WithChain(cron.SkipIfStillRunning(cron.DefaultLogger)))
 
 	if _, err := c.AddFunc(config.Environment.WinnerCron, func() { runWinners(b) }); err != nil {
 		logger.Instance().Error("schedule winner", zap.Error(err))
 	}
-	// if _, err := c.AddFunc(config.Environment.IdleCron, func() { runIdle(b) }); err != nil {
-	// 	logger.Instance().Error("schedule idle", zap.Error(err))
-	// }
+	if _, err := c.AddFunc(config.Environment.IdleCron, func() { runIdle(b) }); err != nil {
+		logger.Instance().Error("schedule idle", zap.Error(err))
+	}
 	if _, err := c.AddFunc("@daily", runMessagePrune); err != nil {
 		logger.Instance().Error("schedule message prune", zap.Error(err))
 	}
@@ -123,37 +124,14 @@ func runIdle(b *bot.Bot) {
 		return
 	}
 	ctx := context.Background()
+	now := time.Now().UTC()
 	chats, err := models.Chats.Active(ctx)
 	if err != nil {
 		logger.Instance().Error("idle: active chats", zap.Error(err))
 		return
 	}
 	for _, chat := range chats {
-		if !chat.IdleDays.Valid || chat.IdleDays.Int64 < 1 {
-			continue
-		}
-		last, err := models.Messages.LastActivity(ctx, chat.ID)
-		if err != nil {
-			continue
-		}
-		threshold := time.Duration(chat.IdleDays.Int64) * 24 * time.Hour
-		if last.Valid && time.Since(last.Time) < threshold {
-			continue
-		}
-		if chat.IdlePokedAt.Valid && time.Since(chat.IdlePokedAt.Time) < threshold {
-			continue
-		}
-		msg := locale.Random(chat.Locale, "idle")
-		if msg == "" {
-			continue
-		}
-		if _, err := b.SendMessage(ctx, &bot.SendMessageParams{ChatID: chat.ID, Text: msg}); err != nil {
-			logger.Instance().Error("idle: send", zap.Error(err))
-			continue
-		}
-		if err := models.Chats.SetIdlePokedAt(ctx, chat.ID, time.Now()); err != nil {
-			logger.Instance().Error("idle: mark poked", zap.Error(err))
-		}
+		idle.PokeChat(ctx, b, chat, now)
 	}
 }
 

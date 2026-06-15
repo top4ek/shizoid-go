@@ -164,14 +164,13 @@ en:
     usage: "Usage: /winner, /winner current, /winner enable [label], /winner disable"
 
   idle:
-    - "So dead in here :("
-    - Anyone alive?
-    - Hey, peekaboo!
-    - Oh, a tumbleweed just rolled by.
-    - One-two-three-four-five, off I go to booze!
+    - "%{asker}, do you know where %{user} is?"
+    - "Hey %{asker}, %{user} hasn't written for %{days} days — what's up?"
+    - "%{asker}, heard anything from %{user}? They've gone quiet."
+    - "By the way %{asker}, is %{user} still alive? They've been silent."
 
   idle_cmd:
-    enabled: "I'll poke the chat after %{days} days of silence."
+    enabled: "Once a day I'll ask about members silent for more than %{days} days."
     disabled: "I won't poke the silent anymore."
     usage: "Usage: /idle <days> or /idle disable"
 
