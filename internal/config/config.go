@@ -13,12 +13,13 @@ type ValidationError struct {
 }
 
 type Settings struct {
-	Runtime  runtime_config  `yaml:"runtime" env-prefix:"RUNTIME_"`
-	Database database_config `yaml:"database" env-prefix:"DATABASE_"`
-	Telegram telegram_config `yaml:"telegram" env-prefix:"TELEGRAM_"`
-	Sentry   sentry_config   `yaml:"sentry" env-prefix:"SENTRY_"`
-	App      app_config      `yaml:"app" env-prefix:"APP_"`
-	Neural   neural_config   `yaml:"neural"`
+	AppEnv      string          `yaml:"app_env" env:"APP_ENV" env-default:"production"`
+	AppLogLevel string          `yaml:"log_level" env:"LOG_LEVEL"`
+	Database    database_config `yaml:"database" env-prefix:"DATABASE_"`
+	Telegram    telegram_config `yaml:"telegram" env-prefix:"TELEGRAM_"`
+	Sentry      sentry_config   `yaml:"sentry" env-prefix:"SENTRY_"`
+	App         app_config      `yaml:"app" env-prefix:"APP_"`
+	Neural      neural_config   `yaml:"neural"`
 }
 
 type database_config struct {
@@ -42,8 +43,8 @@ type sentry_config struct {
 }
 
 type runtime_config struct {
-	AppEnv      string `yaml:"app_env" env:"APP_ENV" env-default:"production"`
-	AppLogLevel string `yaml:"log_level" env:"LOG_LEVEL"`
+	AppEnv      string
+	AppLogLevel string
 }
 
 type app_config struct {
@@ -97,7 +98,10 @@ func Load(path string) error {
 	Telegram = settings.Telegram
 	Environment = settings.App
 	Sentry = settings.Sentry
-	Runtime = settings.Runtime
+	Runtime = runtime_config{
+		AppEnv:      settings.AppEnv,
+		AppLogLevel: settings.AppLogLevel,
+	}
 	Neural = settings.Neural
 	MaxReplyContextBytes = maxReplyContextBytes(Neural.Reply)
 	if MaxReplyContextBytes <= 0 {

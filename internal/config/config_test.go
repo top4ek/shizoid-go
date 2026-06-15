@@ -13,9 +13,8 @@ func TestLoadFromYAML(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")
 	require.NoError(t, os.WriteFile(path, []byte(`
-runtime:
-  app_env: development
-  log_level: debug
+app_env: development
+log_level: debug
 database:
   host: dbhost
   port: "5433"
@@ -61,6 +60,43 @@ neural:
 	assert.Equal(t, 32000, MaxReplyContextBytes)
 	assert.Equal(t, 4096, MaxSummaryContextBytes)
 	assert.True(t, Development())
+	assert.Equal(t, "debug", Runtime.AppLogLevel)
+}
+
+func TestLoadTopLevelRuntimeKeys(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+	require.NoError(t, os.WriteFile(path, []byte(`
+app:
+  allow_to_all: false
+  bind_to: 8095
+  bot_owners:
+    - 808
+  generation_mode: classic
+  idle_cron: "40 16 * * *"
+  locale: ru
+  memory_cron: "0 */3 * * *"
+  winner_cron: "20 1 * * *"
+app_env: production
+log_level: debug
+database:
+  host: postgresql
+  name: shizoid
+  password: secret
+  port: "5432"
+  user: shizoid
+telegram:
+  token: "123:ABC"
+  webhook_url: ""
+`), 0o600))
+
+	require.NoError(t, Load(path))
+
+	assert.Equal(t, "production", Runtime.AppEnv)
+	assert.Equal(t, "debug", Runtime.AppLogLevel)
+	assert.False(t, Development())
+	assert.Equal(t, "postgresql", Database.Host)
+	assert.Equal(t, int16(8095), Environment.BindTo)
 }
 
 func TestLoadAppliesDefaults(t *testing.T) {

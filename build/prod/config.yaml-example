@@ -1,6 +1,5 @@
-runtime:
-  app_env: production
-  log_level: info
+app_env: production
+log_level: info
 
 database:
   host: postgres

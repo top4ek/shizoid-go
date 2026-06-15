@@ -39,8 +39,8 @@ and [`build/dev/config.yaml-example`](build/dev/config.yaml-example) for local d
 
 | Section | Key | Default | Purpose |
 | --- | --- | --- | --- |
-| `runtime` | `app_env` | `production` | `development` or `dev` for console logs; otherwise JSON |
-| `runtime` | `log_level` | — | `debug`, `info`, `warn`, `error` |
+| (top-level) | `app_env` | `production` | `development` or `dev` for console logs; otherwise JSON |
+| (top-level) | `log_level` | — | `debug`, `info`, `warn`, `error` |
 | `telegram` | `token` | — | Bot token (required) |
 | `app` | `bot_owners` | — | Owner Telegram user IDs |
 | `database` | `*` | — | Postgres host/port/name/user/password |
