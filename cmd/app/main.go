@@ -21,6 +21,7 @@ import (
 	"shizoid/internal/scheduler"
 	"shizoid/internal/sentry"
 	"shizoid/internal/telegram"
+	"shizoid/internal/utils"
 )
 
 func main() {
@@ -102,13 +103,18 @@ func main() {
 	if config.Telegram.PollMode() {
 		botInstance.Start(ctx)
 	} else {
+		addr := fmt.Sprintf(":%d", config.Environment.BindTo)
 		server := &http.Server{
-			Addr:              fmt.Sprintf(":%d", config.Environment.BindTo),
-			Handler:           botInstance.WebhookHandler(),
+			Addr:              addr,
+			Handler:           utils.HTTPWithPing(botInstance.WebhookHandler()),
 			ReadHeaderTimeout: 10 * time.Second,
 			ReadTimeout:       30 * time.Second,
 			WriteTimeout:      30 * time.Second,
 		}
+		logger.Instance().Info("webhook server listening",
+			zap.String("addr", addr),
+			zap.String("health", "/ping"),
+		)
 		go func() {
 			if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 				logger.Instance().Fatal("webhook server", zap.Error(err))
@@ -119,6 +125,8 @@ func main() {
 		defer shutdownCancel()
 		if err := server.Shutdown(shutdownCtx); err != nil {
 			logger.Instance().Warn("webhook server shutdown", zap.Error(err))
+		} else {
+			logger.Instance().Info("webhook server stopped")
 		}
 	}
 }
