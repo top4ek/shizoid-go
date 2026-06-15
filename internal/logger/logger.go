@@ -42,3 +42,12 @@ func Instance() *zap.Logger {
 	}
 	return logg
 }
+
+func TruncateLogText(text string) string {
+	const max = 200
+	r := []rune(text)
+	if len(r) <= max {
+		return text
+	}
+	return string(r[:max]) + "…"
+}

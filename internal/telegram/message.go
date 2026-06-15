@@ -62,6 +62,7 @@ func Send(ctx context.Context, b *bot.Bot, update *tgmodels.Update, text string,
 	}
 	logger.Instance().Debug("send message",
 		zap.Int64("chat_id", update.Message.Chat.ID),
+		zap.String("text", logger.TruncateLogText(text)),
 		zap.Int("text_len", len(text)),
 		zap.Int("reply_to", replyToMessageID),
 	)

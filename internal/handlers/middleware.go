@@ -39,7 +39,7 @@ func updateLogFields(update *tgmodels.Update) []zap.Field {
 			fields = append(fields, zap.Int64("user_id", msg.From.ID))
 		}
 		if msg.Text != "" {
-			fields = append(fields, zap.String("text", truncateLogText(msg.Text)))
+			fields = append(fields, zap.String("text", logger.TruncateLogText(msg.Text)))
 		}
 	}
 	if update.CallbackQuery != nil {
@@ -59,15 +59,6 @@ func updateLogFields(update *tgmodels.Update) []zap.Field {
 		}
 	}
 	return fields
-}
-
-func truncateLogText(text string) string {
-	const max = 200
-	r := []rune(text)
-	if len(r) <= max {
-		return text
-	}
-	return string(r[:max]) + "…"
 }
 
 func updateKind(update *tgmodels.Update) string {
