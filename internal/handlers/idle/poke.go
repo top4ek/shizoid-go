@@ -61,6 +61,7 @@ func PokeChat(ctx context.Context, b *bot.Bot, chat *models.Chat, now time.Time)
 		ChatID:              chat.ID,
 		Text:                text,
 		DisableNotification: true,
+		LinkPreviewOptions:  &tgmodels.LinkPreviewOptions{IsDisabled: bot.True()},
 	}
 	if markdown {
 		params.ParseMode = tgmodels.ParseModeMarkdown

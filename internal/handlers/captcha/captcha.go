@@ -136,10 +136,11 @@ func challengeMember(ctx context.Context, b *bot.Bot, chatID int64, lang string,
 	kb := &tgmodels.InlineKeyboardMarkup{InlineKeyboard: [][]tgmodels.InlineKeyboardButton{row}}
 
 	sent, err := b.SendMessage(ctx, &bot.SendMessageParams{
-		ChatID:      chatID,
-		Text:        text,
-		ParseMode:   tgmodels.ParseModeMarkdown,
-		ReplyMarkup: kb,
+		ChatID:              chatID,
+		Text:                text,
+		ParseMode:           tgmodels.ParseModeMarkdown,
+		ReplyMarkup:         kb,
+		LinkPreviewOptions:  &tgmodels.LinkPreviewOptions{IsDisabled: bot.True()},
 	})
 	if err != nil {
 		if app.Ready() {

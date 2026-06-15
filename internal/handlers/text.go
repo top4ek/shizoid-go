@@ -110,7 +110,8 @@ func sendGreeting(ctx context.Context, b *bot.Bot, chatID int64) {
 		return
 	}
 	_, _ = b.SendMessage(ctx, &bot.SendMessageParams{
-		ChatID: chatID,
-		Text:   text,
+		ChatID:             chatID,
+		Text:               text,
+		LinkPreviewOptions: &tgmodels.LinkPreviewOptions{IsDisabled: bot.True()},
 	})
 }
