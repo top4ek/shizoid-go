@@ -40,8 +40,8 @@ func generateWebhookSecretToken() (string, error) {
 // ConfigureDelivery registers poll or webhook delivery mode with Telegram.
 func ConfigureDelivery(ctx context.Context, b *bot.Bot) error {
 	if config.Telegram.PollMode() {
-		if _, err := b.DeleteWebhook(ctx, &bot.DeleteWebhookParams{}); err != nil {
-			return err
+		if err := clearWebhookForPoll(ctx, b); err != nil {
+			logger.Instance().Warn("telegram delete webhook", zap.Error(err))
 		}
 		logger.Instance().Info("telegram delivery mode", zap.String("mode", "poll"))
 		return nil
@@ -52,8 +52,9 @@ func ConfigureDelivery(ctx context.Context, b *bot.Bot) error {
 	}
 
 	params := &bot.SetWebhookParams{
-		URL:         config.Telegram.WebhookUrl,
-		SecretToken: config.Telegram.WebhookSecretToken,
+		URL:            config.Telegram.WebhookUrl,
+		SecretToken:    config.Telegram.WebhookSecretToken,
+		AllowedUpdates: AllowedUpdates(),
 	}
 	if _, err := b.SetWebhook(ctx, params); err != nil {
 		return err
@@ -63,4 +64,17 @@ func ConfigureDelivery(ctx context.Context, b *bot.Bot) error {
 		zap.String("url", config.Telegram.WebhookUrl),
 	)
 	return nil
+}
+
+// clearWebhookForPoll removes an active webhook before long polling.
+func clearWebhookForPoll(ctx context.Context, b *bot.Bot) error {
+	info, err := b.GetWebhookInfo(ctx)
+	if err != nil {
+		return err
+	}
+	if info.URL == "" {
+		return nil
+	}
+	_, err = b.DeleteWebhook(ctx, &bot.DeleteWebhookParams{})
+	return err
 }

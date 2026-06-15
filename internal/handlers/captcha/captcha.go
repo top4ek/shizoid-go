@@ -62,22 +62,11 @@ func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 	}
 }
 
-// OnNewMembers mutes and challenges each unsolved new member.
-func OnNewMembers(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
-	msg := update.Message
-	chat := app.ChatFrom(ctx)
-	if chat == nil {
-		return
-	}
+// OnMemberJoined challenges a single member who just joined the chat.
+func OnMemberJoined(ctx context.Context, b *bot.Bot, chatID int64, member tgmodels.User) {
 	lang := app.Locale(ctx)
-	for i := range msg.NewChatMembers {
-		member := msg.NewChatMembers[i]
-		if member.IsBot {
-			continue
-		}
-		if err := challengeMember(ctx, b, msg.Chat.ID, lang, member); err != nil {
-			logger.Instance().Error("captcha challenge", zap.Int64("user_id", member.ID), zap.Error(err))
-		}
+	if err := challengeMember(ctx, b, chatID, lang, member); err != nil {
+		logger.Instance().Error("captcha challenge", zap.Int64("user_id", member.ID), zap.Error(err))
 	}
 }
 
@@ -88,6 +77,10 @@ func challengeMember(ctx context.Context, b *bot.Bot, chatID int64, lang string,
 			return err
 		}
 		if global {
+			logger.Instance().Debug("captcha skip: global_solved",
+				zap.Int64("chat_id", chatID),
+				zap.Int64("user_id", member.ID),
+			)
 			return models.Participations.MarkCaptchaSolved(ctx, chatID, member.ID)
 		}
 		solved, err := models.Participations.CaptchaSolved(ctx, chatID, member.ID)
@@ -95,12 +88,35 @@ func challengeMember(ctx context.Context, b *bot.Bot, chatID int64, lang string,
 			return err
 		}
 		if solved {
+			logger.Instance().Debug("captcha skip: chat_solved",
+				zap.Int64("chat_id", chatID),
+				zap.Int64("user_id", member.ID),
+			)
+			return nil
+		}
+		claimed, err := models.Participations.TryClaimCaptcha(ctx, chatID, member.ID)
+		if err != nil {
+			return err
+		}
+		if !claimed {
+			logger.Instance().Debug("captcha skip: duplicate",
+				zap.Int64("chat_id", chatID),
+				zap.Int64("user_id", member.ID),
+			)
 			return nil
 		}
 	}
 
+	logger.Instance().Debug("captcha challenge: start",
+		zap.Int64("chat_id", chatID),
+		zap.Int64("user_id", member.ID),
+	)
+
 	correct, buttons, err := buildChallenge(lang)
 	if err != nil {
+		if app.Ready() {
+			_ = models.Participations.ClearCaptcha(ctx, chatID, member.ID)
+		}
 		return err
 	}
 
@@ -126,11 +142,26 @@ func challengeMember(ctx context.Context, b *bot.Bot, chatID int64, lang string,
 		ReplyMarkup: kb,
 	})
 	if err != nil {
+		if app.Ready() {
+			_ = models.Participations.ClearCaptcha(ctx, chatID, member.ID)
+		}
 		return err
 	}
 
+	logger.Instance().Debug("captcha challenge: sent",
+		zap.Int64("chat_id", chatID),
+		zap.Int64("user_id", member.ID),
+		zap.Int("message_id", sent.ID),
+	)
+
 	if app.Ready() && sent != nil {
-		return models.Participations.StartCaptcha(ctx, chatID, member.ID, correct.Emoji, sent.ID)
+		if err := models.Participations.SetCaptchaDetails(ctx, chatID, member.ID, correct.Emoji, sent.ID); err != nil {
+			return err
+		}
+		logger.Instance().Debug("captcha challenge: persisted",
+			zap.Int64("chat_id", chatID),
+			zap.Int64("user_id", member.ID),
+		)
 	}
 	return nil
 }
@@ -220,6 +251,10 @@ func Callback(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 		Text:            locale.T(lang, "captcha.solved"),
 	})
 	deleteCaptchaMessage(ctx, b, chatID, cq.Message.Message.ID)
+	logger.Instance().Debug("captcha solved",
+		zap.Int64("chat_id", chatID),
+		zap.Int64("user_id", targetID),
+	)
 }
 
 // ExpirePending kicks users with captcha challenges past the timeout.
@@ -234,6 +269,10 @@ func ExpirePending(ctx context.Context, b *bot.Bot) {
 	}
 	for _, p := range pending {
 		failCaptcha(ctx, b, p.ChatID, p.UserID, p.MessageID)
+		logger.Instance().Debug("captcha expired",
+			zap.Int64("chat_id", p.ChatID),
+			zap.Int64("user_id", p.UserID),
+		)
 	}
 }
 
@@ -247,6 +286,10 @@ func failCaptcha(ctx context.Context, b *bot.Bot, chatID, userID int64, messageI
 			logger.Instance().Error("captcha clear", zap.Error(err))
 		}
 	}
+	logger.Instance().Debug("captcha failed",
+		zap.Int64("chat_id", chatID),
+		zap.Int64("user_id", userID),
+	)
 }
 
 func deleteCaptchaMessage(ctx context.Context, b *bot.Bot, chatID int64, messageID int) {

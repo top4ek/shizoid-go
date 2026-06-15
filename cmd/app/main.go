@@ -68,6 +68,7 @@ func main() {
 	options := []bot.Option{
 		bot.WithDefaultHandler(handlers.DefaultHandler),
 		bot.WithMiddlewares(sentry.Recover, handlers.LogUpdate, handlers.Ingest),
+		bot.WithAllowedUpdates(telegram.AllowedUpdates()),
 		bot.WithSkipGetMe(), // verified below; avoids 5s init timeout on slow Telegram API during hot reload
 	}
 	if config.Telegram.WebhookSecretToken != "" {

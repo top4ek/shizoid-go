@@ -11,10 +11,9 @@ import (
 
 	"shizoid/internal/app"
 	"shizoid/internal/handlers/binary_dice"
-	"shizoid/internal/models"
-	"shizoid/internal/handlers/captcha"
 	"shizoid/internal/locale"
 	"shizoid/internal/logger"
+	"shizoid/internal/models"
 	"shizoid/internal/telegram"
 )
 
@@ -27,7 +26,7 @@ func DefaultHandler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 	}
 
 	if len(msg.NewChatMembers) > 0 {
-		handleNewMembers(ctx, b, update)
+		handleMembersJoined(ctx, b, msg.Chat.ID, msg.NewChatMembers, "new_chat_members")
 		return
 	}
 
@@ -102,29 +101,16 @@ func hasAnchor(ctx context.Context, text string) bool {
 	return false
 }
 
-func handleNewMembers(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
-	if !app.Enabled(ctx) {
-		return
-	}
-	chat := app.ChatFrom(ctx)
-	if chat == nil {
-		return
-	}
-	if chat.CaptchaEnabled() {
-		captcha.OnNewMembers(ctx, b, update)
-	}
-	if chat.Greeting {
-		sendGreeting(ctx, b, update)
-	}
-}
-
-func sendGreeting(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
+func sendGreeting(ctx context.Context, b *bot.Bot, chatID int64) {
 	if !app.Ready() {
 		return
 	}
-	text, ok, err := models.Greetings.Get(ctx, update.Message.Chat.ID)
+	text, ok, err := models.Greetings.Get(ctx, chatID)
 	if err != nil || !ok || text == "" {
 		return
 	}
-	telegram.Reply(ctx, b, update, text, "")
+	_, _ = b.SendMessage(ctx, &bot.SendMessageParams{
+		ChatID: chatID,
+		Text:   text,
+	})
 }

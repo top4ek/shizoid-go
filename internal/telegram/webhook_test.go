@@ -19,6 +19,10 @@ import (
 
 const testToken = "123:ABC"
 
+const webhookInfoEmpty = `{"ok":true,"result":{"url":"","has_custom_certificate":false,"pending_update_count":0}}`
+const webhookInfoSet = `{"ok":true,"result":{"url":"https://example.com/hook","has_custom_certificate":false,"pending_update_count":0}}`
+const apiOKTrue = `{"ok":true,"result":true}`
+
 func TestMain(m *testing.M) {
 	logger.Init(true, "error")
 	os.Exit(m.Run())
@@ -57,25 +61,73 @@ func newMockBot(t *testing.T, handler http.HandlerFunc) *bot.Bot {
 	return b
 }
 
-func TestConfigureDeliveryPollMode(t *testing.T) {
+func TestConfigureDeliveryPollModeNoWebhook(t *testing.T) {
 	loadTelegramConfig(t, `
 telegram:
   token: "123:ABC"
   webhook_url: ""
 `)
 
-	var gotMethod string
-	var gotForm map[string]string
+	var methods []string
 	b := newMockBot(t, func(rw http.ResponseWriter, req *http.Request) {
-		gotMethod = req.URL.Path
-		gotForm = parseMultipartForm(t, req)
-		_, err := rw.Write([]byte(`{"ok":true,"result":true}`))
+		methods = append(methods, req.URL.Path)
+		body := apiOKTrue
+		if req.URL.Path == "/bot"+testToken+"/getWebhookInfo" {
+			body = webhookInfoEmpty
+		}
+		_, err := rw.Write([]byte(body))
 		require.NoError(t, err)
 	})
 
 	require.NoError(t, ConfigureDelivery(context.Background(), b))
-	assert.Equal(t, "/bot"+testToken+"/deleteWebhook", gotMethod)
-	assert.Empty(t, gotForm)
+	require.Equal(t, []string{"/bot" + testToken + "/getWebhookInfo"}, methods)
+}
+
+func TestConfigureDeliveryPollModeClearsWebhook(t *testing.T) {
+	loadTelegramConfig(t, `
+telegram:
+  token: "123:ABC"
+  webhook_url: ""
+`)
+
+	var methods []string
+	b := newMockBot(t, func(rw http.ResponseWriter, req *http.Request) {
+		methods = append(methods, req.URL.Path)
+		var body string
+		switch req.URL.Path {
+		case "/bot" + testToken + "/getWebhookInfo":
+			body = webhookInfoSet
+		default:
+			body = apiOKTrue
+		}
+		_, err := rw.Write([]byte(body))
+		require.NoError(t, err)
+	})
+
+	require.NoError(t, ConfigureDelivery(context.Background(), b))
+	assert.Equal(t, []string{
+		"/bot" + testToken + "/getWebhookInfo",
+		"/bot" + testToken + "/deleteWebhook",
+	}, methods)
+}
+
+func TestConfigureDeliveryPollModeDeleteFailsStillOK(t *testing.T) {
+	loadTelegramConfig(t, `
+telegram:
+  token: "123:ABC"
+  webhook_url: ""
+`)
+
+	b := newMockBot(t, func(rw http.ResponseWriter, req *http.Request) {
+		if req.URL.Path == "/bot"+testToken+"/getWebhookInfo" {
+			_, err := rw.Write([]byte(webhookInfoSet))
+			require.NoError(t, err)
+			return
+		}
+		// empty body simulates network/proxy failure
+	})
+
+	require.NoError(t, ConfigureDelivery(context.Background(), b))
 }
 
 func TestConfigureDeliveryWebhookMode(t *testing.T) {
@@ -91,7 +143,7 @@ telegram:
 	b := newMockBot(t, func(rw http.ResponseWriter, req *http.Request) {
 		gotMethod = req.URL.Path
 		gotForm = parseMultipartForm(t, req)
-		_, err := rw.Write([]byte(`{"ok":true,"result":true}`))
+		_, err := rw.Write([]byte(apiOKTrue))
 		require.NoError(t, err)
 	})
 
@@ -99,6 +151,8 @@ telegram:
 	assert.Equal(t, "/bot"+testToken+"/setWebhook", gotMethod)
 	assert.Equal(t, "https://example.com/hook", gotForm["url"])
 	assert.Equal(t, "secret-42", gotForm["secret_token"])
+	assert.Contains(t, gotForm["allowed_updates"], "chat_member")
+	assert.Contains(t, gotForm["allowed_updates"], "message")
 }
 
 func TestConfigureDeliveryWebhookWithoutSecret(t *testing.T) {
@@ -111,7 +165,7 @@ telegram:
 	var gotForm map[string]string
 	b := newMockBot(t, func(rw http.ResponseWriter, req *http.Request) {
 		gotForm = parseMultipartForm(t, req)
-		_, err := rw.Write([]byte(`{"ok":true,"result":true}`))
+		_, err := rw.Write([]byte(apiOKTrue))
 		require.NoError(t, err)
 	})
 
