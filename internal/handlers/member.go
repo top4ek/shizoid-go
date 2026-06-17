@@ -9,7 +9,9 @@ import (
 
 	"shizoid/internal/app"
 	"shizoid/internal/handlers/captcha"
+	"shizoid/internal/handlers/greeting"
 	"shizoid/internal/logger"
+	"shizoid/internal/models"
 )
 
 // ChatMemberHandler handles chat_member updates (join transitions).
@@ -90,6 +92,8 @@ func handleMembersJoined(ctx context.Context, b *bot.Bot, chatID int64, users []
 	)
 
 	challenged := false
+	needGreeting := false
+	var greetedUsers []int64
 	for i := range users {
 		member := users[i]
 		if member.IsBot {
@@ -99,18 +103,38 @@ func handleMembersJoined(ctx context.Context, b *bot.Bot, chatID int64, users []
 			)
 			continue
 		}
-		if !chat.CaptchaEnabled() {
-			continue
+		if chat.CaptchaEnabled() {
+			challenged = true
+			captcha.OnMemberJoined(ctx, b, chatID, member)
 		}
-		challenged = true
-		captcha.OnMemberJoined(ctx, b, chatID, member)
+		if chat.Greeting {
+			claimed, err := greeting.OnMemberJoined(ctx, chatID, member)
+			if err != nil {
+				logger.Instance().Error("greeting claim", zap.Int64("user_id", member.ID), zap.Error(err))
+				continue
+			}
+			if claimed {
+				needGreeting = true
+				greetedUsers = append(greetedUsers, member.ID)
+			}
+		}
 	}
 	if chat.CaptchaEnabled() && !challenged {
 		logger.Instance().Debug("join skip: all members are bots", zap.Int64("chat_id", chatID))
 	} else if !chat.CaptchaEnabled() {
 		logger.Instance().Debug("join skip: captcha disabled", zap.Int64("chat_id", chatID))
 	}
-	if chat.Greeting {
-		sendGreeting(ctx, b, chatID)
+	if needGreeting {
+		sent, err := greeting.Send(ctx, b, chatID)
+		if err != nil || !sent {
+			if err != nil {
+				logger.Instance().Error("greeting send", zap.Int64("chat_id", chatID), zap.Error(err))
+			}
+			for _, uid := range greetedUsers {
+				if clearErr := models.Participations.ClearGreeting(ctx, chatID, uid); clearErr != nil {
+					logger.Instance().Error("greeting clear", zap.Int64("user_id", uid), zap.Error(clearErr))
+				}
+			}
+		}
 	}
 }
