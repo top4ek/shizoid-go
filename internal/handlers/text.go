@@ -13,7 +13,6 @@ import (
 	"shizoid/internal/handlers/binary_dice"
 	"shizoid/internal/locale"
 	"shizoid/internal/logger"
-	"shizoid/internal/models"
 	"shizoid/internal/telegram"
 )
 
@@ -99,19 +98,4 @@ func hasAnchor(ctx context.Context, text string) bool {
 		}
 	}
 	return false
-}
-
-func sendGreeting(ctx context.Context, b *bot.Bot, chatID int64) {
-	if !app.Ready() {
-		return
-	}
-	text, ok, err := models.Greetings.Get(ctx, chatID)
-	if err != nil || !ok || text == "" {
-		return
-	}
-	_, _ = b.SendMessage(ctx, &bot.SendMessageParams{
-		ChatID:             chatID,
-		Text:               text,
-		LinkPreviewOptions: &tgmodels.LinkPreviewOptions{IsDisabled: bot.True()},
-	})
 }

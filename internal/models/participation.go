@@ -18,6 +18,7 @@ type Participation struct {
 	CaptchaRequestedAt  sql.NullTime   `db:"captcha_requested_at"`
 	CaptchaCorrectEmoji sql.NullString `db:"captcha_correct_emoji"`
 	CaptchaMessageID    sql.NullInt64  `db:"captcha_message_id"`
+	GreetedAt           sql.NullTime   `db:"greeted_at"`
 	CreatedAt           time.Time      `db:"created_at"`
 	UpdatedAt           time.Time      `db:"updated_at"`
 }
@@ -50,13 +51,13 @@ type CaptchaPending struct {
 }
 
 const participationColumns = `id, chat_id, user_id, left_at, score, active_at, captcha_solved_at,
-	captcha_requested_at, captcha_correct_emoji, captcha_message_id, created_at, updated_at`
+	captcha_requested_at, captcha_correct_emoji, captcha_message_id, greeted_at, created_at, updated_at`
 
 func scanParticipation(row interface{ Scan(...any) error }) (*Participation, error) {
 	p := &Participation{}
 	err := row.Scan(
 		&p.ID, &p.ChatID, &p.UserID, &p.LeftAt, &p.Score, &p.ActiveAt, &p.CaptchaSolvedAt,
-		&p.CaptchaRequestedAt, &p.CaptchaCorrectEmoji, &p.CaptchaMessageID,
+		&p.CaptchaRequestedAt, &p.CaptchaCorrectEmoji, &p.CaptchaMessageID, &p.GreetedAt,
 		&p.CreatedAt, &p.UpdatedAt,
 	)
 	if err != nil {
@@ -136,6 +137,40 @@ func (participations) GetCaptchaPending(ctx context.Context, chatID, userID int6
 		id = int(msgID.Int64)
 	}
 	return emoji.String, id, true, nil
+}
+
+func (participations) GreetingGreeted(ctx context.Context, chatID, userID int64) (bool, error) {
+	var greeted bool
+	err := db.QueryRowContext(ctx,
+		`SELECT greeted_at IS NOT NULL FROM participations WHERE chat_id = $1 AND user_id = $2`,
+		chatID, userID).Scan(&greeted)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	return greeted, err
+}
+
+func (participations) TryClaimGreeting(ctx context.Context, chatID, userID int64) (bool, error) {
+	res, err := db.ExecContext(ctx, `
+		UPDATE participations SET greeted_at = NOW(), updated_at = NOW()
+		WHERE chat_id = $1 AND user_id = $2 AND greeted_at IS NULL`,
+		chatID, userID)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return n == 1, nil
+}
+
+func (participations) ClearGreeting(ctx context.Context, chatID, userID int64) error {
+	_, err := db.ExecContext(ctx, `
+		UPDATE participations SET greeted_at = NULL, updated_at = NOW()
+		WHERE chat_id = $1 AND user_id = $2`,
+		chatID, userID)
+	return err
 }
 
 func (participations) TryClaimCaptcha(ctx context.Context, chatID, userID int64) (bool, error) {
