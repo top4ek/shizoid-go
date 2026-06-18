@@ -1,6 +1,8 @@
 package config
 
 import (
+	"time"
+
 	"github.com/ilyakaznacheev/cleanenv"
 
 	"shizoid/internal/models"
@@ -55,7 +57,7 @@ type app_config struct {
 	GenerationMode string  `yaml:"generation_mode" env:"GENERATION_MODE" env-default:"neural"`
 	WinnerCron     string  `yaml:"winner_cron" env:"WINNER_CRON" env-default:"20 1 * * *"`
 	IdleCron       string  `yaml:"idle_cron" env:"IDLE_CRON" env-default:"0 * * * *"`
-	CaptchaCron    string  `yaml:"captcha_cron" env:"CAPTCHA_CRON" env-default:"@every 1m"`
+	GreetingTTL    string  `yaml:"greeting_ttl" env:"GREETING_TTL" env-default:"5m"`
 
 	AppPrompt     string `yaml:"app_prompt" env:"APP_PROMPT"`
 	IdlePrompt    string `yaml:"idle_prompt" env:"IDLE_PROMPT"`
@@ -78,6 +80,7 @@ var (
 	Neural                 neural_config
 	MaxReplyContextBytes   int
 	MaxSummaryContextBytes int
+	GreetingDeleteAfter    time.Duration
 )
 
 const defaultReplyContextBytes = 16384
@@ -120,6 +123,13 @@ func Load(path string) error {
 	} else {
 		DefaultGenerationMode = models.GenerationModeNeural
 	}
+
+	d, err := time.ParseDuration(settings.App.GreetingTTL)
+	if err != nil || d <= 0 {
+		return &ValidationError{Field: "app.greeting_ttl", Msg: "invalid duration"}
+	}
+	GreetingDeleteAfter = d
+
 	return validate()
 }
 

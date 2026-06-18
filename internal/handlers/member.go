@@ -107,7 +107,7 @@ func handleMembersJoined(ctx context.Context, b *bot.Bot, chatID int64, users []
 			challenged = true
 			captcha.OnMemberJoined(ctx, b, chatID, member)
 		}
-		if chat.Greeting {
+		if chat.GreetingEnabled() {
 			claimed, err := greeting.OnMemberJoined(ctx, chatID, member)
 			if err != nil {
 				logger.Instance().Error("greeting claim", zap.Int64("user_id", member.ID), zap.Error(err))
@@ -125,7 +125,7 @@ func handleMembersJoined(ctx context.Context, b *bot.Bot, chatID int64, users []
 		logger.Instance().Debug("join skip: captcha disabled", zap.Int64("chat_id", chatID))
 	}
 	if needGreeting {
-		sent, err := greeting.Send(ctx, b, chatID)
+		msgID, sent, err := greeting.Send(ctx, b, chatID)
 		if err != nil || !sent {
 			if err != nil {
 				logger.Instance().Error("greeting send", zap.Int64("chat_id", chatID), zap.Error(err))
@@ -135,6 +135,8 @@ func handleMembersJoined(ctx context.Context, b *bot.Bot, chatID int64, users []
 					logger.Instance().Error("greeting clear", zap.Int64("user_id", uid), zap.Error(clearErr))
 				}
 			}
+		} else if err := models.Participations.SetGreetingMessageID(ctx, chatID, greetedUsers, msgID); err != nil {
+			logger.Instance().Error("greeting message id", zap.Int64("chat_id", chatID), zap.Error(err))
 		}
 	}
 }

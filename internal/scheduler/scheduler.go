@@ -18,6 +18,7 @@ import (
 	"shizoid/internal/app"
 	"shizoid/internal/config"
 	"shizoid/internal/handlers/captcha"
+	"shizoid/internal/handlers/greeting"
 	"shizoid/internal/handlers/idle"
 	"shizoid/internal/handlers/winner"
 	"shizoid/internal/locale"
@@ -42,8 +43,8 @@ func Start(b *bot.Bot) *cron.Cron {
 	if _, err := c.AddFunc(config.Environment.MemoryCron, func() { runMemory() }); err != nil {
 		logger.Instance().Error("schedule memory", zap.Error(err))
 	}
-	if _, err := c.AddFunc(config.Environment.CaptchaCron, func() { runCaptcha(b) }); err != nil {
-		logger.Instance().Error("schedule captcha", zap.Error(err))
+	if _, err := c.AddFunc("@every 1m", func() { runEveryMinute(b) }); err != nil {
+		logger.Instance().Error("schedule every minute", zap.Error(err))
 	}
 
 	c.Start()
@@ -184,9 +185,11 @@ func runMemory() {
 	}
 }
 
-func runCaptcha(b *bot.Bot) {
-	logger.Instance().Debug("cron: captcha")
-	captcha.ExpirePending(context.Background(), b)
+func runEveryMinute(b *bot.Bot) {
+	logger.Instance().Debug("cron: every minute")
+	ctx := context.Background()
+	captcha.ExpirePending(ctx, b)
+	greeting.ExpirePending(ctx, b)
 }
 
 func runMessagePrune() {

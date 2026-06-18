@@ -49,7 +49,7 @@ func statusText(lang string, chat *models.Chat, pairs int) string {
 		captcha = locale.T(lang, "yes")
 	}
 	greeting := locale.T(lang, "no")
-	if chat.Greeting {
+	if chat.GreetingEnabled() {
 		greeting = locale.T(lang, "yes")
 	}
 	winnerLabel := locale.T(lang, "winner.disabled")

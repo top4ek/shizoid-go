@@ -3,6 +3,7 @@ package greeting
 
 import (
 	"context"
+	"database/sql"
 	"strings"
 
 	"github.com/go-telegram/bot"
@@ -40,22 +41,14 @@ func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 	case greetingUsage:
 		telegram.Reply(ctx, b, update, locale.T(lang, "greeting.usage"), "")
 	case greetingClear:
-		if err := models.Greetings.Delete(ctx, chatID); err != nil {
-			logger.Instance().Error("greeting delete", zap.Error(err))
-			return
-		}
-		if err := models.Chats.SetGreeting(ctx, chatID, false); err != nil {
-			logger.Instance().Error("greeting flag", zap.Error(err))
+		if err := models.Chats.SetGreetingText(ctx, chatID, sql.NullString{}); err != nil {
+			logger.Instance().Error("greeting clear", zap.Error(err))
 			return
 		}
 		telegram.Reply(ctx, b, update, locale.T(lang, "greeting.cleared"), "")
 	case greetingSet:
-		if err := models.Greetings.Set(ctx, chatID, payload); err != nil {
+		if err := models.Chats.SetGreetingText(ctx, chatID, sql.NullString{String: payload, Valid: true}); err != nil {
 			logger.Instance().Error("greeting set", zap.Error(err))
-			return
-		}
-		if err := models.Chats.SetGreeting(ctx, chatID, true); err != nil {
-			logger.Instance().Error("greeting flag", zap.Error(err))
 			return
 		}
 		telegram.Reply(ctx, b, update, locale.T(lang, "greeting.set"), "")

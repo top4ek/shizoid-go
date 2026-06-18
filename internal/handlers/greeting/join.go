@@ -8,8 +8,10 @@ import (
 	"go.uber.org/zap"
 
 	"shizoid/internal/app"
+	"shizoid/internal/config"
 	"shizoid/internal/logger"
 	"shizoid/internal/models"
+	"shizoid/internal/telegram"
 )
 
 // OnMemberJoined claims greeting for one member; returns true if the chat message should be sent.
@@ -42,25 +44,49 @@ func OnMemberJoined(ctx context.Context, chatID int64, member tgmodels.User) (bo
 	return true, nil
 }
 
-// Send posts the configured greeting text to the chat. The second return value reports whether a message was sent.
-func Send(ctx context.Context, b *bot.Bot, chatID int64) (bool, error) {
+// Send posts the configured greeting text to the chat.
+func Send(ctx context.Context, b *bot.Bot, chatID int64) (messageID int, sent bool, err error) {
 	if !app.Ready() {
-		return false, nil
+		return 0, false, nil
 	}
-	text, ok, err := models.Greetings.Get(ctx, chatID)
-	if err != nil {
-		return false, err
+	chat := app.ChatFrom(ctx)
+	if chat == nil || !chat.GreetingEnabled() {
+		return 0, false, nil
 	}
-	if !ok || text == "" {
-		return false, nil
-	}
-	_, err = b.SendMessage(ctx, &bot.SendMessageParams{
+	msg, err := b.SendMessage(ctx, &bot.SendMessageParams{
 		ChatID:             chatID,
-		Text:               text,
+		Text:               chat.GreetingText.String,
 		LinkPreviewOptions: &tgmodels.LinkPreviewOptions{IsDisabled: bot.True()},
 	})
 	if err != nil {
-		return false, err
+		return 0, false, err
 	}
-	return true, nil
+	if msg == nil {
+		return 0, false, nil
+	}
+	return msg.ID, true, nil
+}
+
+// ExpirePending deletes greeting messages past the configured TTL.
+func ExpirePending(ctx context.Context, b *bot.Bot) {
+	if !app.Ready() {
+		return
+	}
+	pending, err := models.Participations.ExpiredGreeting(ctx, config.GreetingDeleteAfter)
+	if err != nil {
+		logger.Instance().Error("greeting expired pending", zap.Error(err))
+		return
+	}
+	for _, p := range pending {
+		if p.MessageID != 0 {
+			telegram.Delete(ctx, b, p.ChatID, p.MessageID)
+		}
+		if err := models.Participations.ClearGreetingMessageID(ctx, p.ChatID, p.MessageID); err != nil {
+			logger.Instance().Error("greeting clear message id", zap.Error(err))
+		}
+		logger.Instance().Debug("greeting expired",
+			zap.Int64("chat_id", p.ChatID),
+			zap.Int("message_id", p.MessageID),
+		)
+	}
 }

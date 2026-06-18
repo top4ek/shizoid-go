@@ -29,7 +29,7 @@ func TestStatusText(t *testing.T) {
 		GenerationMode:   models.GenerationModeClassic,
 		Winner:           sql.NullString{String: "daily", Valid: true},
 		CaptchaEnabledAt: captchaAt,
-		Greeting:         true,
+		GreetingText:     sql.NullString{String: "Welcome!", Valid: true},
 	}
 	got := statusText("ru", chat, 42)
 	yes := bot.EscapeMarkdown(locale.T("ru", "yes"))

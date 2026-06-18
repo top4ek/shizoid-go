@@ -12,7 +12,7 @@ type Chat struct {
 	Kind             string         `db:"kind"` // private, group, supergroup, channel
 	Random           int16          `db:"random"`
 	Eightball        bool           `db:"eightball"`
-	Greeting         bool           `db:"greeting"`
+	GreetingText     sql.NullString `db:"greeting_text"`
 	Winner           sql.NullString `db:"winner"`
 	Locale           string         `db:"locale"`
 	GenerationMode   GenerationMode `db:"generation_mode"`
@@ -51,7 +51,12 @@ func (c *Chat) CaptchaEnabled() bool {
 	return c.CaptchaEnabledAt.Valid
 }
 
-const chatColumns = `id, kind, random, eightball, greeting, winner, locale, generation_mode,
+// GreetingEnabled reports whether a join greeting is configured for the chat.
+func (c *Chat) GreetingEnabled() bool {
+	return c.GreetingText.Valid
+}
+
+const chatColumns = `id, kind, random, eightball, greeting_text, winner, locale, generation_mode,
 	title, first_name, last_name, username, active_at, idle_days,
 	captcha_enabled_at, captcha_greeting, system_prompt, memory,
 	idle_poked_at, memory_summarized_at, created_at`
@@ -59,7 +64,7 @@ const chatColumns = `id, kind, random, eightball, greeting, winner, locale, gene
 func scanChat(row interface{ Scan(...any) error }) (*Chat, error) {
 	c := &Chat{}
 	err := row.Scan(
-		&c.ID, &c.Kind, &c.Random, &c.Eightball, &c.Greeting, &c.Winner, &c.Locale, &c.GenerationMode,
+		&c.ID, &c.Kind, &c.Random, &c.Eightball, &c.GreetingText, &c.Winner, &c.Locale, &c.GenerationMode,
 		&c.Title, &c.FirstName, &c.LastName, &c.Username, &c.ActiveAt, &c.IdleDays,
 		&c.CaptchaEnabledAt, &c.CaptchaGreeting, &c.SystemPrompt, &c.Memory,
 		&c.IdlePokedAt, &c.MemorySummarizedAt, &c.CreatedAt,
@@ -164,8 +169,8 @@ func (chats) SetIdle(ctx context.Context, id int64, days sql.NullInt64) error {
 	return err
 }
 
-func (chats) SetGreeting(ctx context.Context, id int64, enabled bool) error {
-	_, err := db.ExecContext(ctx, `UPDATE chats SET greeting = $2 WHERE id = $1`, id, enabled)
+func (chats) SetGreetingText(ctx context.Context, id int64, text sql.NullString) error {
+	_, err := db.ExecContext(ctx, `UPDATE chats SET greeting_text = $2 WHERE id = $1`, id, text)
 	return err
 }
 

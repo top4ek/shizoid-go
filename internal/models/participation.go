@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"time"
+
+	"github.com/lib/pq"
 )
 
 // Participation represents the participations table (a user in a chat).
@@ -19,6 +21,7 @@ type Participation struct {
 	CaptchaCorrectEmoji sql.NullString `db:"captcha_correct_emoji"`
 	CaptchaMessageID    sql.NullInt64  `db:"captcha_message_id"`
 	GreetedAt           sql.NullTime   `db:"greeted_at"`
+	GreetingMessageID   sql.NullInt64  `db:"greeting_message_id"`
 	CreatedAt           time.Time      `db:"created_at"`
 	UpdatedAt           time.Time      `db:"updated_at"`
 }
@@ -50,14 +53,22 @@ type CaptchaPending struct {
 	MessageID int
 }
 
+// GreetingPending is a greeting message past its delete deadline.
+type GreetingPending struct {
+	ChatID    int64
+	MessageID int
+}
+
 const participationColumns = `id, chat_id, user_id, left_at, score, active_at, captcha_solved_at,
-	captcha_requested_at, captcha_correct_emoji, captcha_message_id, greeted_at, created_at, updated_at`
+	captcha_requested_at, captcha_correct_emoji, captcha_message_id, greeted_at,
+	greeting_message_id, created_at, updated_at`
 
 func scanParticipation(row interface{ Scan(...any) error }) (*Participation, error) {
 	p := &Participation{}
 	err := row.Scan(
 		&p.ID, &p.ChatID, &p.UserID, &p.LeftAt, &p.Score, &p.ActiveAt, &p.CaptchaSolvedAt,
 		&p.CaptchaRequestedAt, &p.CaptchaCorrectEmoji, &p.CaptchaMessageID, &p.GreetedAt,
+		&p.GreetingMessageID,
 		&p.CreatedAt, &p.UpdatedAt,
 	)
 	if err != nil {
@@ -167,10 +178,59 @@ func (participations) TryClaimGreeting(ctx context.Context, chatID, userID int64
 
 func (participations) ClearGreeting(ctx context.Context, chatID, userID int64) error {
 	_, err := db.ExecContext(ctx, `
-		UPDATE participations SET greeted_at = NULL, updated_at = NOW()
+		UPDATE participations SET greeted_at = NULL, greeting_message_id = NULL, updated_at = NOW()
 		WHERE chat_id = $1 AND user_id = $2`,
 		chatID, userID)
 	return err
+}
+
+func (participations) SetGreetingMessageID(ctx context.Context, chatID int64, userIDs []int64, messageID int) error {
+	_, err := db.ExecContext(ctx, `
+		UPDATE participations SET greeting_message_id = $3, updated_at = NOW()
+		WHERE chat_id = $1 AND user_id = ANY($2)
+		  AND greeted_at IS NOT NULL
+		  AND greeting_message_id IS NULL`,
+		chatID, pq.Array(userIDs), messageID)
+	return err
+}
+
+func (participations) ClearGreetingMessageID(ctx context.Context, chatID int64, messageID int) error {
+	_, err := db.ExecContext(ctx, `
+		UPDATE participations SET greeting_message_id = NULL, updated_at = NOW()
+		WHERE chat_id = $1 AND greeting_message_id = $2`,
+		chatID, messageID)
+	return err
+}
+
+func (participations) ExpiredGreeting(ctx context.Context, timeout time.Duration) ([]GreetingPending, error) {
+	deadline := time.Now().Add(-timeout)
+	const q = `
+		SELECT DISTINCT p.chat_id, p.greeting_message_id
+		FROM participations p
+		JOIN chats c ON c.id = p.chat_id
+		WHERE p.greeted_at IS NOT NULL
+		  AND p.greeting_message_id IS NOT NULL
+		  AND p.left_at IS NULL
+		  AND c.greeting_text IS NOT NULL
+		  AND p.greeted_at < $1`
+	rows, err := db.QueryContext(ctx, q, deadline)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []GreetingPending
+	for rows.Next() {
+		var p GreetingPending
+		var msgID sql.NullInt64
+		if err := rows.Scan(&p.ChatID, &msgID); err != nil {
+			return nil, err
+		}
+		if msgID.Valid {
+			p.MessageID = int(msgID.Int64)
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
 }
 
 func (participations) TryClaimCaptcha(ctx context.Context, chatID, userID int64) (bool, error) {
