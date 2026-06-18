@@ -90,17 +90,20 @@ func pickAsker(active []models.MemberInfo, inactive models.MemberInfo) (*models.
 }
 
 func composePokeText(ctx context.Context, chat *models.Chat, asker, inactive models.MemberInfo, days int) (string, bool) {
-	if n := app.Neural(); n != nil && n.ReplyConfigured() {
-		system := buildIdleSystem(chat)
-		user := buildIdleUserMessage(chat, asker, inactive, days)
-		text, err := n.Reply(ctx, system, user)
-		if err != nil {
-			logger.Instance().Warn("idle: neural fallback to locale",
-				zap.Int64("chat_id", chat.ID),
-				zap.Error(err),
-			)
-		} else if text = strings.TrimSpace(text); text != "" {
-			return text, false
+	if chat.GenerationMode == models.GenerationModeNeural {
+		n := app.Neural()
+		if n != nil && n.ReplyConfigured() {
+			system := buildIdleSystem(chat)
+			user := buildIdleUserMessage(chat, asker, inactive, days)
+			text, err := n.Reply(ctx, system, user)
+			if err != nil {
+				logger.Instance().Warn("idle: neural fallback to locale",
+					zap.Int64("chat_id", chat.ID),
+					zap.Error(err),
+				)
+			} else if text = strings.TrimSpace(text); text != "" {
+				return text, false
+			}
 		}
 	}
 	return formatLocalePoke(chat.Locale, asker, inactive, days), true

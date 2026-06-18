@@ -12,12 +12,13 @@ WARNING: neuroslop ahead (Opus and Composer are used).
 
 - Every incoming message first ensures the chat, user and participation rows
   exist (one transaction), then learning/scoring happens in background goroutines.
-- Generation has switchable per-chat Markov modes via `/generation`:
-  - `classic` — trigram Markov walk (pair of words → reply); chat admins may set.
-  - `simplified` — bigram walk (only the second word seeds the next reply; more nonsensical); chat admins may set.
-- When `neural.reply` providers are configured, every reply first tries an
-  OpenAI-compatible LLM; on failure (unavailable, error, or no slots) it falls
-  back to the chat's Markov mode (`classic` or `simplified`).
+- Generation has switchable per-chat modes via `/generation`:
+  - `neural` (default) — when `neural.reply` providers are configured, tries an
+    OpenAI-compatible LLM first; on failure (unavailable, error, or no slots)
+    falls back to classic Markov.
+  - `classic` — trigram Markov walk (pair of words → reply); no LLM.
+  - `simplified` — bigram walk (only the second word seeds the next reply; more
+    nonsensical); no LLM.
 - The Markov "context" for reply fallback is derived from the
   most recent messages stored per chat (byte budget = max `context_size` across
   `neural.reply` providers, or 16 KiB when no reply providers are configured).
@@ -44,7 +45,7 @@ and [`build/dev/config.yaml-example`](build/dev/config.yaml-example) for local d
 | `telegram` | `token` | — | Bot token (required) |
 | `app` | `bot_owners` | — | Owner Telegram user IDs |
 | `database` | `*` | — | Postgres host/port/name/user/password |
-| `app` | `generation_mode` | `classic` | Default mode for new chats |
+| `app` | `generation_mode` | `neural` | Default mode for new chats |
 | `app` | `winner_cron` | `20 4 * * *` | Daily winner draw (04:20) |
 | `app` | `memory_cron` | `0 */6 * * *` | Memory summarization for all active chats (messages since last `memory_summarized_at`) |
 | `app` | `allow_to_all` | `false` | Reply in all chats without `/start` |

@@ -115,7 +115,7 @@ telegram:
 	assert.Equal(t, "shizoid", Database.User)
 	assert.Equal(t, int16(3000), Environment.BindTo)
 	assert.Equal(t, "ru", Environment.Locale)
-	assert.Equal(t, "classic", Environment.GenerationMode)
+	assert.Equal(t, "neural", Environment.GenerationMode)
 	assert.Equal(t, "production", Runtime.AppEnv)
 	assert.Equal(t, "production", Sentry.Environment)
 	assert.NotEmpty(t, Environment.AppPrompt)
