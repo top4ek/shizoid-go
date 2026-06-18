@@ -36,11 +36,12 @@ func New(n *neural.Client) *Generator {
 func (g *Generator) SetBotID(id int64) { g.botID = id }
 
 // Reply generates a response seeded from the incoming words, falling back to the
-// chat's stored context if the seed yields nothing. When neural reply providers
-// are configured it tries them first and falls back to the chat's Markov mode
-// (classic or simplified) on any failure (busy slots, timeout or unavailable backend).
+// chat's stored context if the seed yields nothing. In neural mode, when reply
+// providers are configured it tries them first and falls back to classic Markov
+// on any failure (busy slots, timeout or unavailable backend). In classic or
+// simplified mode only the corresponding Markov walk is used.
 func (g *Generator) Reply(ctx context.Context, chat *models.Chat, words []string, userID int64) (string, error) {
-	if g.neural.ReplyConfigured() {
+	if chat.GenerationMode == models.GenerationModeNeural && g.neural.ReplyConfigured() {
 		logger.Instance().Debug("generator neural attempt",
 			zap.Int64("chat_id", chat.ID),
 			zap.Int("words", len(words)),
@@ -51,16 +52,22 @@ func (g *Generator) Reply(ctx context.Context, chat *models.Chat, words []string
 		}
 		logger.Instance().Warn("neural fallback to markov",
 			zap.Int64("chat_id", chat.ID),
-			zap.String("mode", chat.GenerationMode.String()),
+			zap.String("mode", "classic"),
 			zap.Error(err),
 		)
+		return g.markovReply(ctx, chat, words, false)
 	}
 
+	simplified := chat.GenerationMode == models.GenerationModeSimplified
+	return g.markovReply(ctx, chat, words, simplified)
+}
+
+func (g *Generator) markovReply(ctx context.Context, chat *models.Chat, words []string, simplified bool) (string, error) {
 	seedIDs, err := g.idsOf(ctx, words)
 	if err != nil {
 		return "", err
 	}
-	if reply, err := g.buildSentence(ctx, chat, seedIDs); err != nil {
+	if reply, err := g.buildSentence(ctx, chat, seedIDs, simplified); err != nil {
 		return "", err
 	} else if reply != "" {
 		return reply, nil
@@ -70,7 +77,7 @@ func (g *Generator) Reply(ctx context.Context, chat *models.Chat, words []string
 	if err != nil {
 		return "", err
 	}
-	return g.buildSentence(ctx, chat, contextIDs)
+	return g.buildSentence(ctx, chat, contextIDs, simplified)
 }
 
 func (g *Generator) Learn(ctx context.Context, chatID int64, text string) error {
@@ -118,11 +125,10 @@ func (g *Generator) Learn(ctx context.Context, chatID int64, text string) error 
 	return nil
 }
 
-func (g *Generator) buildSentence(ctx context.Context, chat *models.Chat, seedIDs []int64) (string, error) {
+func (g *Generator) buildSentence(ctx context.Context, chat *models.Chat, seedIDs []int64, simplified bool) (string, error) {
 	if len(seedIDs) == 0 {
 		return "", nil
 	}
-	simplified := chat.GenerationMode == models.GenerationModeSimplified
 
 	first := models.MatchNull()
 	second := models.MatchIn(seedIDs)

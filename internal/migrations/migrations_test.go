@@ -22,6 +22,7 @@ func TestEmbeddedMigrations(t *testing.T) {
 	assert.Contains(t, names, "00001_init.sql")
 	assert.Contains(t, names, "00002_drop_neural_mode.sql")
 	assert.Contains(t, names, "00003_participations_greeted_at.sql")
+	assert.Contains(t, names, "00004_restore_neural_mode.sql")
 }
 
 func TestRunRequiresDB(t *testing.T) {

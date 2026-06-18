@@ -52,7 +52,7 @@ type app_config struct {
 	BotOwners      []int64 `yaml:"bot_owners" env:"BOT_OWNERS"`
 	BindTo         int16   `yaml:"bind_to" env:"BIND_TO" env-default:"3000"`
 	Locale         string  `yaml:"locale" env:"LOCALE" env-default:"ru"`
-	GenerationMode string  `yaml:"generation_mode" env:"GENERATION_MODE" env-default:"classic"`
+	GenerationMode string  `yaml:"generation_mode" env:"GENERATION_MODE" env-default:"neural"`
 	WinnerCron     string  `yaml:"winner_cron" env:"WINNER_CRON" env-default:"20 1 * * *"`
 	IdleCron       string  `yaml:"idle_cron" env:"IDLE_CRON" env-default:"0 * * * *"`
 	CaptchaCron    string  `yaml:"captcha_cron" env:"CAPTCHA_CRON" env-default:"@every 1m"`
@@ -118,7 +118,7 @@ func Load(path string) error {
 	if mode, ok := models.ParseGenerationMode(Environment.GenerationMode); ok {
 		DefaultGenerationMode = mode
 	} else {
-		DefaultGenerationMode = models.GenerationModeClassic
+		DefaultGenerationMode = models.GenerationModeNeural
 	}
 	return validate()
 }

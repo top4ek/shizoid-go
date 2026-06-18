@@ -24,7 +24,7 @@ app:
     - 11111111
   bind_to: 3000
   locale: ru
-  generation_mode: classic
+  generation_mode: neural
   winner_cron: "20 1 * * *"
   idle_cron: "0 * * * *" # poll hourly; 9:00–21:00 UTC window enforced in code
   # app_prompt: override the default system prompt for neural replies

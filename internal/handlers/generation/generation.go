@@ -1,4 +1,5 @@
-// Package generation lets chat admins switch classic/simplified Markov modes.
+// Package generation lets chat admins switch generation mode: classic/simplified
+// Markov-only walks, or neural (LLM with classic Markov fallback).
 package generation
 
 import (
