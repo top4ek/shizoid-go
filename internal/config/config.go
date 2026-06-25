@@ -83,7 +83,7 @@ var (
 const defaultReplyContextBytes = 16384
 
 const (
-	defaultAppPrompt = `You are "Shizoid", a Telegram group chatbot. Follow these rules strictly.
+	defaultAppPrompt = `You are "Shizoid" or "Шизойд" or "Шиза", a Telegram group chatbot. Follow these rules strictly.
 [LONG-TERM MEMORY]
 - Use brief facts from past chats provided in the prompt context to maintain continuity.
 - Do not repeat your or users' past replies verbatim.
