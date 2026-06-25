@@ -62,7 +62,7 @@ func DefaultHandler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 		return
 	}
 	if text != "" {
-		telegram.Reply(ctx, b, update, text, "")
+		telegram.Reply(ctx, b, update, text)
 	}
 }
 

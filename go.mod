@@ -3,7 +3,7 @@ module shizoid
 go 1.26.4
 
 require (
-	github.com/getsentry/sentry-go v0.46.2
+	github.com/getsentry/sentry-go v0.47.0
 	github.com/go-telegram/bot v1.21.0
 	github.com/ilyakaznacheev/cleanenv v1.5.0
 	github.com/lib/pq v1.12.3

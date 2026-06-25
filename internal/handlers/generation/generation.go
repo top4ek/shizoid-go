@@ -40,19 +40,19 @@ func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 	modes := modeList()
 	switch action, mode := classifyGenerationAction(payload); action {
 	case generationShow:
-		telegram.Reply(ctx, b, update, locale.T(lang, "generation.current", "mode", chat.GenerationMode.String()), "")
+		telegram.Reply(ctx, b, update, locale.T(lang, "generation.current", "mode", chat.GenerationMode.String()))
 	case generationUnknown:
-		telegram.Reply(ctx, b, update, locale.T(lang, "generation.unknown", "list", modes), "")
+		telegram.Reply(ctx, b, update, locale.T(lang, "generation.unknown", "list", modes))
 	case generationSet:
 		if !utils.IsChatAdmin(ctx, b, chat.ID, userID) {
-			telegram.Reply(ctx, b, update, locale.T(lang, "common.not_admin"), "")
+			telegram.Reply(ctx, b, update, locale.T(lang, "common.not_admin"))
 			return
 		}
 		if err := models.Chats.SetGenerationMode(ctx, chat.ID, mode); err != nil {
 			logger.Instance().Error("set generation mode", zap.Error(err))
 			return
 		}
-		telegram.Reply(ctx, b, update, locale.T(lang, "generation.set", "mode", mode.String()), "")
+		telegram.Reply(ctx, b, update, locale.T(lang, "generation.set", "mode", mode.String()))
 	}
 }
 

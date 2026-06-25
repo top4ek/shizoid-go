@@ -32,5 +32,5 @@ func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 		logger.Instance().Error("start enable", zap.Error(err))
 		return
 	}
-	telegram.Reply(ctx, b, update, locale.Random(app.Locale(ctx), "ok"), "")
+	telegram.Reply(ctx, b, update, locale.Random(app.Locale(ctx), "ok"))
 }

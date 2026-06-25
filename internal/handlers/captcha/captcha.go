@@ -38,7 +38,7 @@ func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 	chatID := update.Message.Chat.ID
 	lang := app.Locale(ctx)
 	if !utils.IsChatAdmin(ctx, b, chatID, update.Message.From.ID) {
-		telegram.Reply(ctx, b, update, locale.T(lang, "common.not_admin"), "")
+		telegram.Reply(ctx, b, update, locale.T(lang, "common.not_admin"))
 		return
 	}
 
@@ -50,15 +50,15 @@ func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 			logger.Instance().Error("captcha enable", zap.Error(err))
 			return
 		}
-		telegram.Reply(ctx, b, update, locale.T(lang, "captcha.enabled"), "")
+		telegram.Reply(ctx, b, update, locale.T(lang, "captcha.enabled"))
 	case "disable":
 		if err := models.Chats.SetCaptcha(ctx, chatID, false); err != nil {
 			logger.Instance().Error("captcha disable", zap.Error(err))
 			return
 		}
-		telegram.Reply(ctx, b, update, locale.T(lang, "captcha.disabled"), "")
+		telegram.Reply(ctx, b, update, locale.T(lang, "captcha.disabled"))
 	default:
-		telegram.Reply(ctx, b, update, locale.T(lang, "captcha.usage"), "")
+		telegram.Reply(ctx, b, update, locale.T(lang, "captcha.usage"))
 	}
 }
 
@@ -135,12 +135,9 @@ func challengeMember(ctx context.Context, b *bot.Bot, chatID int64, lang string,
 	}
 	kb := &tgmodels.InlineKeyboardMarkup{InlineKeyboard: [][]tgmodels.InlineKeyboardButton{row}}
 
-	sent, err := b.SendMessage(ctx, &bot.SendMessageParams{
-		ChatID:              chatID,
-		Text:                text,
-		ParseMode:           tgmodels.ParseModeMarkdown,
-		ReplyMarkup:         kb,
-		LinkPreviewOptions:  &tgmodels.LinkPreviewOptions{IsDisabled: bot.True()},
+	sent, err := telegram.SendToChat(ctx, b, chatID, text, telegram.ChatMessageOpts{
+		ReplyMarkup:        kb,
+		DisableLinkPreview: true,
 	})
 	if err != nil {
 		if app.Ready() {

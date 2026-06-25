@@ -23,5 +23,5 @@ func Handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 	if text == "" {
 		text = "Pong!"
 	}
-	telegram.Reply(ctx, b, update, text, "")
+	telegram.Reply(ctx, b, update, text)
 }

@@ -29,7 +29,7 @@ func Handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 	payload := utils.ExtractCommandPayloadText(update)
 	text := response(app.Locale(ctx), payload, update.Message.From.ID)
 	if text != "" {
-		telegram.Reply(ctx, b, update, text, "")
+		telegram.Reply(ctx, b, update, text)
 	}
 }
 

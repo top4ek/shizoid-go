@@ -26,7 +26,7 @@ func Handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 	}
 	text := responseText(app.Locale(ctx), update)
 	if text != "" {
-		telegram.Reply(ctx, b, update, text, models.ParseModeMarkdown)
+		telegram.Reply(ctx, b, update, text)
 	}
 }
 

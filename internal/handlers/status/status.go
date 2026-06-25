@@ -36,7 +36,7 @@ func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 	if err != nil {
 		logger.Instance().Error("status pairs", zap.Error(err))
 	}
-	telegram.Reply(ctx, b, update, statusText(lang, chat, pairs), tgmodels.ParseModeMarkdown)
+	telegram.Reply(ctx, b, update, statusText(lang, chat, pairs))
 }
 
 func statusText(lang string, chat *models.Chat, pairs int) string {

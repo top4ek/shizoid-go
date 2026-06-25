@@ -27,7 +27,7 @@ func Handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 		replyToID = update.Message.ReplyToMessage.ID
 	}
 
-	telegram.Send(ctx, b, update, bot.EscapeMarkdown(text(update)), models.ParseModeMarkdown, replyToID)
+	telegram.Send(ctx, b, update, text(update), replyToID)
 	telegram.Delete(ctx, b, update.Message.Chat.ID, update.Message.ID)
 }
 

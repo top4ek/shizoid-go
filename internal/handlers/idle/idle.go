@@ -33,13 +33,13 @@ func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 	chatID := update.Message.Chat.ID
 	lang := app.Locale(ctx)
 	if !utils.IsChatAdmin(ctx, b, chatID, update.Message.From.ID) {
-		telegram.Reply(ctx, b, update, locale.T(lang, "common.not_admin"), "")
+		telegram.Reply(ctx, b, update, locale.T(lang, "common.not_admin"))
 		return
 	}
 
 	payload := strings.ToLower(strings.TrimSpace(utils.ExtractCommandPayloadText(update)))
 	if payload == "" {
-		telegram.Reply(ctx, b, update, locale.T(lang, "idle_cmd.usage"), "")
+		telegram.Reply(ctx, b, update, locale.T(lang, "idle_cmd.usage"))
 		return
 	}
 	if payload == "disable" || payload == "0" {
@@ -47,18 +47,18 @@ func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 			logger.Instance().Error("idle disable", zap.Error(err))
 			return
 		}
-		telegram.Reply(ctx, b, update, locale.T(lang, "idle_cmd.disabled"), "")
+		telegram.Reply(ctx, b, update, locale.T(lang, "idle_cmd.disabled"))
 		return
 	}
 
 	days, err := strconv.Atoi(payload)
 	if err != nil || days < 1 {
-		telegram.Reply(ctx, b, update, locale.T(lang, "idle_cmd.usage"), "")
+		telegram.Reply(ctx, b, update, locale.T(lang, "idle_cmd.usage"))
 		return
 	}
 	if err := models.Chats.SetIdle(ctx, chatID, sql.NullInt64{Int64: int64(days), Valid: true}); err != nil {
 		logger.Instance().Error("idle set", zap.Error(err))
 		return
 	}
-	telegram.Reply(ctx, b, update, locale.T(lang, "idle_cmd.enabled", "days", days), "")
+	telegram.Reply(ctx, b, update, locale.T(lang, "idle_cmd.enabled", "days", days))
 }

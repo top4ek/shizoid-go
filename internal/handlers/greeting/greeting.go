@@ -31,14 +31,14 @@ func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 	chatID := update.Message.Chat.ID
 	lang := app.Locale(ctx)
 	if !utils.IsChatAdmin(ctx, b, chatID, update.Message.From.ID) {
-		telegram.Reply(ctx, b, update, locale.T(lang, "common.not_admin"), "")
+		telegram.Reply(ctx, b, update, locale.T(lang, "common.not_admin"))
 		return
 	}
 
 	payload := strings.TrimSpace(utils.ExtractCommandPayloadText(update))
 	switch parseGreetingAction(payload) {
 	case greetingUsage:
-		telegram.Reply(ctx, b, update, locale.T(lang, "greeting.usage"), "")
+		telegram.Reply(ctx, b, update, locale.T(lang, "greeting.usage"))
 	case greetingClear:
 		if err := models.Greetings.Delete(ctx, chatID); err != nil {
 			logger.Instance().Error("greeting delete", zap.Error(err))
@@ -48,8 +48,12 @@ func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 			logger.Instance().Error("greeting flag", zap.Error(err))
 			return
 		}
-		telegram.Reply(ctx, b, update, locale.T(lang, "greeting.cleared"), "")
+		telegram.Reply(ctx, b, update, locale.T(lang, "greeting.cleared"))
 	case greetingSet:
+		if err := telegram.ValidateV2(payload); err != nil {
+			telegram.Reply(ctx, b, update, locale.Random(lang, "nok"))
+			return
+		}
 		if err := models.Greetings.Set(ctx, chatID, payload); err != nil {
 			logger.Instance().Error("greeting set", zap.Error(err))
 			return
@@ -58,7 +62,7 @@ func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 			logger.Instance().Error("greeting flag", zap.Error(err))
 			return
 		}
-		telegram.Reply(ctx, b, update, locale.T(lang, "greeting.set"), "")
+		telegram.Reply(ctx, b, update, locale.T(lang, "greeting.set"))
 	}
 }
 

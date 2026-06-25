@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/go-telegram/bot"
-	tgmodels "github.com/go-telegram/bot/models"
 	"go.uber.org/zap"
 
 	"shizoid/internal/app"
@@ -16,6 +15,7 @@ import (
 	"shizoid/internal/locale"
 	"shizoid/internal/logger"
 	"shizoid/internal/models"
+	"shizoid/internal/telegram"
 	"shizoid/internal/utils"
 )
 
@@ -52,21 +52,15 @@ func PokeChat(ctx context.Context, b *bot.Bot, chat *models.Chat, now time.Time)
 		return false
 	}
 
-	text, markdown := composePokeText(ctx, chat, *asker, inactive, days)
+	text := composePokeText(ctx, chat, *asker, inactive, days)
 	if text == "" {
 		return false
 	}
 
-	params := &bot.SendMessageParams{
-		ChatID:              chat.ID,
-		Text:                text,
+	if _, err := telegram.SendToChat(ctx, b, chat.ID, text, telegram.ChatMessageOpts{
 		DisableNotification: true,
-		LinkPreviewOptions:  &tgmodels.LinkPreviewOptions{IsDisabled: bot.True()},
-	}
-	if markdown {
-		params.ParseMode = tgmodels.ParseModeMarkdown
-	}
-	if _, err := b.SendMessage(ctx, params); err != nil {
+		DisableLinkPreview:  true,
+	}); err != nil {
 		logger.Instance().Error("idle: send", zap.Int64("chat_id", chat.ID), zap.Error(err))
 		return false
 	}
@@ -89,7 +83,7 @@ func pickAsker(active []models.MemberInfo, inactive models.MemberInfo) (*models.
 	return &pool[rand.IntN(len(pool))], true
 }
 
-func composePokeText(ctx context.Context, chat *models.Chat, asker, inactive models.MemberInfo, days int) (string, bool) {
+func composePokeText(ctx context.Context, chat *models.Chat, asker, inactive models.MemberInfo, days int) string {
 	if chat.GenerationMode == models.GenerationModeNeural {
 		n := app.Neural()
 		if n != nil && n.ReplyConfigured() {
@@ -102,11 +96,11 @@ func composePokeText(ctx context.Context, chat *models.Chat, asker, inactive mod
 					zap.Error(err),
 				)
 			} else if text = strings.TrimSpace(text); text != "" {
-				return text, false
+				return text
 			}
 		}
 	}
-	return formatLocalePoke(chat.Locale, asker, inactive, days), true
+	return formatLocalePoke(chat.Locale, asker, inactive, days)
 }
 
 func buildIdleSystem(chat *models.Chat) string {
@@ -154,10 +148,10 @@ func formatLocalePoke(lang string, asker, inactive models.MemberInfo, days int) 
 	if template == "" {
 		return ""
 	}
-	return interpolatePoke(template, map[string]any{
+	return interpolatePoke(telegram.FormatTemplate(template), map[string]any{
 		"asker": formatMemberLink(lang, asker),
 		"user":  formatMemberLink(lang, inactive),
-		"days":  days,
+		"days":  telegram.FormatPlain(fmt.Sprint(days)),
 	})
 }
 
