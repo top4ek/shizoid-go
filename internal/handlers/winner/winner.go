@@ -43,17 +43,17 @@ func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 	case "disable":
 		disable(ctx, b, update, chat.ID, lang)
 	case "current":
-		telegram.Reply(ctx, b, update, currentStats(ctx, chat.ID, lang), tgmodels.ParseModeMarkdown)
+		telegram.Reply(ctx, b, update, currentStats(ctx, chat.ID, lang))
 	case "":
-		telegram.Reply(ctx, b, update, previousWinner(ctx, chat.ID, lang), tgmodels.ParseModeMarkdown, true)
+		telegram.Reply(ctx, b, update, previousWinner(ctx, chat.ID, lang), true)
 	default:
-		telegram.Reply(ctx, b, update, locale.T(lang, "winner.usage"), "")
+		telegram.Reply(ctx, b, update, locale.T(lang, "winner.usage"))
 	}
 }
 
 func enable(ctx context.Context, b *bot.Bot, update *tgmodels.Update, chatID int64, label, lang string) {
 	if !utils.IsChatAdmin(ctx, b, chatID, update.Message.From.ID) {
-		telegram.Reply(ctx, b, update, locale.T(lang, "common.not_admin"), "")
+		telegram.Reply(ctx, b, update, locale.T(lang, "common.not_admin"))
 		return
 	}
 	if label == "" {
@@ -63,19 +63,19 @@ func enable(ctx context.Context, b *bot.Bot, update *tgmodels.Update, chatID int
 		logger.Instance().Error("winner enable", zap.Error(err))
 		return
 	}
-	telegram.Reply(ctx, b, update, locale.T(lang, "winner.enabled", "name", label), "")
+	telegram.Reply(ctx, b, update, locale.T(lang, "winner.enabled", "name", label))
 }
 
 func disable(ctx context.Context, b *bot.Bot, update *tgmodels.Update, chatID int64, lang string) {
 	if !utils.IsChatAdmin(ctx, b, chatID, update.Message.From.ID) {
-		telegram.Reply(ctx, b, update, locale.T(lang, "common.not_admin"), "")
+		telegram.Reply(ctx, b, update, locale.T(lang, "common.not_admin"))
 		return
 	}
 	if err := models.Chats.SetWinner(ctx, chatID, sql.NullString{}); err != nil {
 		logger.Instance().Error("winner disable", zap.Error(err))
 		return
 	}
-	telegram.Reply(ctx, b, update, locale.T(lang, "winner.turned_off"), "")
+	telegram.Reply(ctx, b, update, locale.T(lang, "winner.turned_off"))
 }
 
 func markdownPlain(s string) string {

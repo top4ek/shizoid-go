@@ -26,7 +26,7 @@ func Respond(ctx context.Context, b *bot.Bot, update *models.Update) bool {
 	if answer == "" {
 		return false
 	}
-	telegram.Reply(ctx, b, update, answer, "")
+	telegram.Reply(ctx, b, update, answer)
 	return true
 }
 

@@ -13,18 +13,17 @@ import (
 )
 
 const (
-	Command        = "ids"
-	Description    = "Returns IDs of chat and user"
-	HandlerType    = bot.HandlerTypeMessageText
-	MatchType      = bot.MatchTypeCommandStartOnly
-	replyParseMode = models.ParseModeMarkdown
+	Command     = "ids"
+	Description = "Returns IDs of chat and user"
+	HandlerType = bot.HandlerTypeMessageText
+	MatchType   = bot.MatchTypeCommandStartOnly
 )
 
 func Handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 	if update.Message == nil || update.Message.From == nil {
 		return
 	}
-	telegram.Reply(ctx, b, update, text(app.Locale(ctx), update), replyParseMode)
+	telegram.Reply(ctx, b, update, text(app.Locale(ctx), update))
 }
 
 func text(lang string, update *models.Update) string {

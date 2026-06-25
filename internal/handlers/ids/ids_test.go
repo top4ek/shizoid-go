@@ -39,7 +39,6 @@ func TestReplyTextIsValidMarkdownV2(t *testing.T) {
 	}
 	got := strings.TrimSpace(text("en", update))
 
-	assert.Equal(t, models.ParseModeMarkdown, replyParseMode)
 	assert.Contains(t, got, `\(private\)`)
 	assert.NotContains(t, got, "(private)", "parentheses must be escaped for MarkdownV2")
 }

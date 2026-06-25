@@ -17,6 +17,15 @@ import (
 
 const maxMessageRunes = 4096
 
+// ChatMessageOpts configures outbound chat messages.
+type ChatMessageOpts struct {
+	MessageThreadID     int
+	ReplyToMessageID    int
+	ReplyMarkup         tgmodels.ReplyMarkup
+	DisableNotification bool
+	DisableLinkPreview  bool
+}
+
 func Typing(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 	if update.Message == nil {
 		return
@@ -32,52 +41,77 @@ func Typing(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 	}
 }
 
-func Reply(ctx context.Context, b *bot.Bot, update *tgmodels.Update, text string, parseMode tgmodels.ParseMode, disableLinkPreview ...bool) {
+func Reply(ctx context.Context, b *bot.Bot, update *tgmodels.Update, text string, disableLinkPreview ...bool) {
 	if update.Message == nil {
 		return
 	}
-	Send(ctx, b, update, text, parseMode, update.Message.ID, disableLinkPreview...)
+	opts := ChatMessageOpts{ReplyToMessageID: update.Message.ID}
+	if len(disableLinkPreview) > 0 && disableLinkPreview[0] {
+		opts.DisableLinkPreview = true
+	}
+	SendFromUpdate(ctx, b, update, text, opts)
 }
 
-func Send(ctx context.Context, b *bot.Bot, update *tgmodels.Update, text string, parseMode tgmodels.ParseMode, replyToMessageID int, disableLinkPreview ...bool) {
+func Send(ctx context.Context, b *bot.Bot, update *tgmodels.Update, text string, replyToMessageID int, disableLinkPreview ...bool) {
 	if update.Message == nil {
 		return
 	}
-	text = truncateMessage(text)
-	params := &bot.SendMessageParams{
-		ChatID:          update.Message.Chat.ID,
-		MessageThreadID: update.Message.MessageThreadID,
-		Text:            text,
+	opts := ChatMessageOpts{ReplyToMessageID: replyToMessageID}
+	if len(disableLinkPreview) > 0 && disableLinkPreview[0] {
+		opts.DisableLinkPreview = true
 	}
-	if replyToMessageID != 0 {
+	SendFromUpdate(ctx, b, update, text, opts)
+}
+
+func SendFromUpdate(ctx context.Context, b *bot.Bot, update *tgmodels.Update, text string, opts ChatMessageOpts) {
+	if update.Message == nil {
+		return
+	}
+	opts.MessageThreadID = update.Message.MessageThreadID
+	_, _ = SendToChat(ctx, b, update.Message.Chat.ID, text, opts)
+}
+
+func SendToChat(ctx context.Context, b *bot.Bot, chatID int64, text string, opts ChatMessageOpts) (*tgmodels.Message, error) {
+	text = prepareOutboundText(text)
+	params := &bot.SendMessageParams{
+		ChatID:              chatID,
+		MessageThreadID:     opts.MessageThreadID,
+		Text:                text,
+		ParseMode:           tgmodels.ParseModeMarkdown,
+		DisableNotification: opts.DisableNotification,
+		ReplyMarkup:         opts.ReplyMarkup,
+	}
+	if opts.ReplyToMessageID != 0 {
 		params.ReplyParameters = &tgmodels.ReplyParameters{
-			MessageID: replyToMessageID,
+			MessageID: opts.ReplyToMessageID,
 		}
 	}
-	if parseMode != "" {
-		params.ParseMode = parseMode
-	}
-	if len(disableLinkPreview) > 0 && disableLinkPreview[0] {
+	if opts.DisableLinkPreview {
 		params.LinkPreviewOptions = &tgmodels.LinkPreviewOptions{IsDisabled: bot.True()}
 	}
 	logger.Instance().Debug("send message",
-		zap.Int64("chat_id", update.Message.Chat.ID),
+		zap.Int64("chat_id", chatID),
 		zap.String("text", logger.TruncateLogText(text)),
 		zap.Int("text_len", len(text)),
-		zap.Int("reply_to", replyToMessageID),
+		zap.Int("reply_to", opts.ReplyToMessageID),
 	)
-	_, err := b.SendMessage(ctx, params)
+	sent, err := b.SendMessage(ctx, params)
 	if err != nil {
 		logger.Instance().Error("send message",
 			zap.Error(err),
-			zap.Int64("chat_id", update.Message.Chat.ID),
+			zap.Int64("chat_id", chatID),
 			zap.Int("text_len", len(text)),
 			zap.Int("text_runes", utf8.RuneCountInString(text)),
 		)
 		sentry.Capture(err)
-		return
+		return nil, err
 	}
-	persistBotMessage(ctx, update.Message.Chat.ID, text)
+	persistBotMessage(ctx, chatID, text)
+	return sent, nil
+}
+
+func prepareOutboundText(text string) string {
+	return truncateMessage(SanitizeV2(text))
 }
 
 func truncateMessage(text string) string {

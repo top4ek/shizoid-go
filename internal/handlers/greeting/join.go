@@ -10,6 +10,7 @@ import (
 	"shizoid/internal/app"
 	"shizoid/internal/logger"
 	"shizoid/internal/models"
+	"shizoid/internal/telegram"
 )
 
 // OnMemberJoined claims greeting for one member; returns true if the chat message should be sent.
@@ -54,10 +55,8 @@ func Send(ctx context.Context, b *bot.Bot, chatID int64) (bool, error) {
 	if !ok || text == "" {
 		return false, nil
 	}
-	_, err = b.SendMessage(ctx, &bot.SendMessageParams{
-		ChatID:             chatID,
-		Text:               text,
-		LinkPreviewOptions: &tgmodels.LinkPreviewOptions{IsDisabled: bot.True()},
+	_, err = telegram.SendToChat(ctx, b, chatID, text, telegram.ChatMessageOpts{
+		DisableLinkPreview: true,
 	})
 	if err != nil {
 		return false, err

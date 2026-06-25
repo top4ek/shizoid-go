@@ -11,7 +11,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/go-telegram/bot"
-	tgmodels "github.com/go-telegram/bot/models"
 	"github.com/robfig/cron/v3"
 	"go.uber.org/zap"
 
@@ -23,6 +22,7 @@ import (
 	"shizoid/internal/locale"
 	"shizoid/internal/logger"
 	"shizoid/internal/models"
+	"shizoid/internal/telegram"
 )
 
 // Start configures and launches the cron jobs. The returned Cron should be
@@ -100,12 +100,9 @@ func announceWinner(ctx context.Context, b *bot.Bot, chatID int64, lang, label s
 		"name", bot.EscapeMarkdown(label),
 		"user", winner.FormatWinnerUser(lang, userID, username, name),
 		"top", winner.FormatTop(lang, entries))
-	if _, err := b.SendMessage(ctx, &bot.SendMessageParams{
-		ChatID:              chatID,
-		Text:                text,
-		ParseMode:           tgmodels.ParseModeMarkdown,
+	if _, err := telegram.SendToChat(ctx, b, chatID, text, telegram.ChatMessageOpts{
 		DisableNotification: true,
-		LinkPreviewOptions:  &tgmodels.LinkPreviewOptions{IsDisabled: bot.True()},
+		DisableLinkPreview:  true,
 	}); err != nil {
 		logger.Instance().Error("winners: announce", zap.Error(err))
 	}
