@@ -25,9 +25,15 @@ func Handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 		return
 	}
 	text := responseText(app.Locale(ctx), update)
-	if text != "" {
-		telegram.Reply(ctx, b, update, text)
+	if text == "" {
+		return
 	}
+	replyToID := 0
+	if update.Message.ReplyToMessage != nil {
+		replyToID = update.Message.ReplyToMessage.ID
+	}
+	telegram.Send(ctx, b, update, text, replyToID)
+	telegram.Delete(ctx, b, update.Message.Chat.ID, update.Message.ID)
 }
 
 func responseText(lang string, update *models.Update) string {
