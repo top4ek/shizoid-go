@@ -60,6 +60,13 @@ func TestSanitizeV2_GabLevel(t *testing.T) {
 	assert.Contains(t, got, "*10%*")
 }
 
+func TestSanitizeV2_BoldWithSpecialCharsInBody(t *testing.T) {
+	got := SanitizeV2("*Шиза!* и *что-то важное*")
+	assert.NoError(t, ValidateV2(got))
+	assert.Contains(t, got, `*Шиза\!*`)
+	assert.Contains(t, got, `*что\-то важное*`)
+}
+
 func TestSanitizeV2_NeuralGarbage(t *testing.T) {
 	cases := []string{
 		"Hello (world)",

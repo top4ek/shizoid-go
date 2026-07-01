@@ -185,11 +185,12 @@ func (p *mdParser) parseDelimited(open, close string) (string, bool) {
 			}
 			if match {
 				body := string(p.rs[contentStart:search])
-				if _, err := parseV2(body, p.sanitize); err != nil {
+				sanitized, err := parseV2(body, p.sanitize)
+				if err != nil {
 					return "", false
 				}
 				p.i = search + len(closeRunes)
-				return body, true
+				return sanitized, true
 			}
 		}
 		search++
