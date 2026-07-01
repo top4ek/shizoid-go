@@ -77,10 +77,35 @@ func shouldRespond(ctx context.Context, msg *tgmodels.Message) bool {
 	if msg.ReplyToMessage != nil && msg.ReplyToMessage.From != nil && msg.ReplyToMessage.From.ID == app.BotID() {
 		return true
 	}
+	if isMentioned(msg) {
+		return true
+	}
 	if hasAnchor(ctx, msg.Text) {
 		return true
 	}
 	return rand.IntN(100) < int(chat.Random)
+}
+
+func isMentioned(msg *tgmodels.Message) bool {
+	botUsername := app.BotUsername()
+	if botUsername == "" {
+		return false
+	}
+	runes := []rune(msg.Text)
+	for _, e := range msg.Entities {
+		if e.Type != tgmodels.MessageEntityTypeMention {
+			continue
+		}
+		end := e.Offset + e.Length
+		if end > len(runes) {
+			continue
+		}
+		mention := strings.ToLower(string(runes[e.Offset:end]))
+		if mention == "@"+botUsername {
+			return true
+		}
+	}
+	return false
 }
 
 func hasAnchor(ctx context.Context, text string) bool {

@@ -5,6 +5,8 @@ import (
 
 	"github.com/go-telegram/bot/models"
 	"github.com/stretchr/testify/assert"
+
+	"shizoid/internal/app"
 )
 
 func TestUpdateKind(t *testing.T) {
@@ -32,6 +34,64 @@ func TestIsBotCommand(t *testing.T) {
 	}))
 	assert.False(t, isBotCommand(&models.Message{Text: "hello"}))
 	assert.False(t, isBotCommand(nil))
+}
+
+func TestIsMentioned(t *testing.T) {
+	cases := []struct {
+		name     string
+		msg      *models.Message
+		username string
+		want     bool
+	}{
+		{
+			name: "mentions bot",
+			msg: &models.Message{
+				Text:     "@testbot hello",
+				Entities: []models.MessageEntity{{Type: models.MessageEntityTypeMention, Offset: 0, Length: 8}},
+			},
+			username: "testbot",
+			want:     true,
+		},
+		{
+			name: "mentions other user",
+			msg: &models.Message{
+				Text:     "@someone hello",
+				Entities: []models.MessageEntity{{Type: models.MessageEntityTypeMention, Offset: 0, Length: 8}},
+			},
+			username: "testbot",
+			want:     false,
+		},
+		{
+			name:     "no entities",
+			msg:      &models.Message{Text: "@testbot hello"},
+			username: "testbot",
+			want:     false,
+		},
+		{
+			name: "empty bot username",
+			msg: &models.Message{
+				Text:     "@testbot hello",
+				Entities: []models.MessageEntity{{Type: models.MessageEntityTypeMention, Offset: 0, Length: 8}},
+			},
+			username: "",
+			want:     false,
+		},
+		{
+			name: "case insensitive",
+			msg: &models.Message{
+				Text:     "@TestBot hello",
+				Entities: []models.MessageEntity{{Type: models.MessageEntityTypeMention, Offset: 0, Length: 8}},
+			},
+			username: "testbot",
+			want:     true,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			app.SetBotUsername(c.username)
+			assert.Equal(t, c.want, isMentioned(c.msg))
+		})
+	}
 }
 
 func TestCommandsUnique(t *testing.T) {
