@@ -32,7 +32,7 @@ func Handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 	if update.Message.ReplyToMessage != nil {
 		replyToID = update.Message.ReplyToMessage.ID
 	}
-	telegram.Send(ctx, b, update, text, replyToID)
+	telegram.Send(ctx, b, update, text, replyToID, true)
 	telegram.Delete(ctx, b, update.Message.Chat.ID, update.Message.ID)
 }
 
@@ -44,13 +44,14 @@ func responseText(lang string, update *models.Update) string {
 	if displayName == "" {
 		displayName = "Unknown"
 	}
+	userLink := utils.UserMarkdownLink(update.Message.From.ID, update.Message.From.Username, displayName)
 	payload := utils.ExtractCommandPayloadText(update)
 	if payload == "" {
 		action := locale.Random(lang, "me")
 		if action == "" {
 			action = "..."
 		}
-		return fmt.Sprintf("*%s* %s", bot.EscapeMarkdown(displayName), bot.EscapeMarkdown(action))
+		return fmt.Sprintf("%s %s", userLink, bot.EscapeMarkdown(action))
 	}
-	return fmt.Sprintf("*%s* %s", bot.EscapeMarkdown(displayName), bot.EscapeMarkdown(payload))
+	return fmt.Sprintf("%s %s", userLink, bot.EscapeMarkdown(payload))
 }
