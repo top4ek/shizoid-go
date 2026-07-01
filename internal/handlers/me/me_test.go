@@ -43,7 +43,7 @@ func TestResponseText_EmptyPayload(t *testing.T) {
 
 	strs := strings.SplitN(responseText("ru", mock), " ", 2)
 
-	assert.Equal(t, "*shizoid*", strs[0])
+	assert.Equal(t, "[shizoid](https://t.me/shizoid)", strs[0])
 	actions := locale.List("ru", "me")
 	assert.NotEmpty(t, actions)
 	assert.Contains(t, escapedActions(actions), strs[1])
@@ -52,7 +52,7 @@ func TestResponseText_EmptyPayload(t *testing.T) {
 func TestResponseText_NonEmptyPayload(t *testing.T) {
 	strs := strings.SplitN(responseText("ru", updateMock()), " ", 2)
 
-	assert.Equal(t, "*shizoid*", strs[0])
+	assert.Equal(t, "[shizoid](https://t.me/shizoid)", strs[0])
 	assert.Equal(t, bot.EscapeMarkdown("thinks different"), strs[1])
 }
 
