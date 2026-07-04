@@ -3,8 +3,6 @@ en:
   no: "no"
 
   common:
-    not_owner: "This command is for bot admins only."
-    not_admin: "This command is for chat admins only."
     error: "Something went wrong. Try again later."
 
   ok:

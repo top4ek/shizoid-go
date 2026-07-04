@@ -3,6 +3,8 @@ package models
 import (
 	"context"
 	"database/sql"
+
+	"github.com/jackc/pgx/v5"
 	"time"
 )
 
@@ -15,10 +17,7 @@ type Message struct {
 	CreatedAt time.Time `db:"created_at"`
 }
 
-type messages struct{}
-
-// Messages provides persistence operations for messages.
-var Messages messages
+type messages struct{ db DBTX }
 
 // MessageRow is a message joined with sender profile fields.
 type MessageRow struct {
@@ -30,41 +29,62 @@ type MessageRow struct {
 	IsBot     sql.NullBool
 }
 
-func (messages) Append(ctx context.Context, chatID, userID int64, text string) error {
-	_, err := db.ExecContext(ctx,
+func (r messages) Append(ctx context.Context, chatID, userID int64, text string) error {
+	_, err := r.db.Exec(ctx,
 		`INSERT INTO messages (chat_id, user_id, text) VALUES ($1, $2, $3)`,
 		chatID, userID, text)
 	return err
 }
 
-func (messages) PruneByBytes(ctx context.Context, keepBytes int) (int64, error) {
+// ChatIDs lists the chats that currently have stored messages.
+func (r messages) ChatIDs(ctx context.Context) ([]int64, error) {
+	rows, err := r.db.Query(ctx, `SELECT DISTINCT chat_id FROM messages`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}
+
+// PruneChatByBytes keeps the newest keepBytes of history for one chat. Pruning
+// per chat keeps the window scan bounded by a single chat's history instead of
+// the whole table.
+func (r messages) PruneChatByBytes(ctx context.Context, chatID int64, keepBytes int) (int64, error) {
 	if keepBytes <= 0 {
 		return 0, nil
 	}
-	res, err := db.ExecContext(ctx, `
+	res, err := r.db.Exec(ctx, `
 		DELETE FROM messages
-		WHERE id IN (
+		WHERE chat_id = $1 AND id IN (
 			SELECT id FROM (
 				SELECT id,
 					SUM(octet_length(text)) OVER (
-						PARTITION BY chat_id
 						ORDER BY created_at DESC, id DESC
 					) AS cum_bytes
 				FROM messages
+				WHERE chat_id = $1
 			) ranked
-			WHERE cum_bytes > $1
-		)`, keepBytes)
+			WHERE cum_bytes > $2
+		)`, chatID, keepBytes)
 	if err != nil {
 		return 0, err
 	}
-	return res.RowsAffected()
+	return res.RowsAffected(), nil
 }
 
-func (messages) RecentByBytes(ctx context.Context, chatID int64, maxBytes int) ([]MessageRow, error) {
+func (r messages) RecentByBytes(ctx context.Context, chatID int64, maxBytes int) ([]MessageRow, error) {
 	if maxBytes <= 0 {
 		return nil, nil
 	}
-	rows, err := db.QueryContext(ctx, `
+	rows, err := r.db.Query(ctx, `
 		SELECT user_id, text, first_name, last_name, username, is_bot
 		FROM (
 			SELECT m.user_id, m.text,
@@ -90,17 +110,17 @@ func (messages) RecentByBytes(ctx context.Context, chatID int64, maxBytes int) (
 	if len(out) > 0 {
 		return out, nil
 	}
-	return recentLatestMessages(ctx, chatID)
+	return r.recentLatestMessages(ctx, chatID)
 }
 
-func (messages) RecentByBytesSince(ctx context.Context, chatID int64, since time.Time, maxBytes int) ([]MessageRow, error) {
+func (r messages) RecentByBytesSince(ctx context.Context, chatID int64, since time.Time, maxBytes int) ([]MessageRow, error) {
 	if since.IsZero() {
-		return Messages.RecentByBytes(ctx, chatID, maxBytes)
+		return r.RecentByBytes(ctx, chatID, maxBytes)
 	}
 	if maxBytes <= 0 {
 		return nil, nil
 	}
-	rows, err := db.QueryContext(ctx, `
+	rows, err := r.db.Query(ctx, `
 		SELECT user_id, text, first_name, last_name, username, is_bot
 		FROM (
 			SELECT m.user_id, m.text,
@@ -126,14 +146,14 @@ func (messages) RecentByBytesSince(ctx context.Context, chatID int64, since time
 	if len(out) > 0 {
 		return out, nil
 	}
-	return recentLatestMessagesSince(ctx, chatID, since)
+	return r.recentLatestMessagesSince(ctx, chatID, since)
 }
 
-func (messages) RecentTextsByBytes(ctx context.Context, chatID int64, maxBytes int) ([]string, error) {
+func (r messages) RecentTextsByBytes(ctx context.Context, chatID int64, maxBytes int) ([]string, error) {
 	if maxBytes <= 0 {
 		return nil, nil
 	}
-	rows, err := db.QueryContext(ctx, `
+	rows, err := r.db.Query(ctx, `
 		SELECT text
 		FROM (
 			SELECT text, created_at, id,
@@ -163,14 +183,14 @@ func (messages) RecentTextsByBytes(ctx context.Context, chatID int64, maxBytes i
 	if len(texts) > 0 {
 		return texts, nil
 	}
-	return recentLatestMessageText(ctx, chatID)
+	return r.recentLatestMessageText(ctx, chatID)
 }
 
-func (messages) TextsSinceByBytes(ctx context.Context, chatID int64, since time.Time, maxBytes int) ([]string, error) {
+func (r messages) TextsSinceByBytes(ctx context.Context, chatID int64, since time.Time, maxBytes int) ([]string, error) {
 	if maxBytes <= 0 {
 		return nil, nil
 	}
-	rows, err := db.QueryContext(ctx, `
+	rows, err := r.db.Query(ctx, `
 		SELECT text
 		FROM (
 			SELECT text, created_at, id,
@@ -197,8 +217,8 @@ func (messages) TextsSinceByBytes(ctx context.Context, chatID int64, since time.
 	return texts, rows.Err()
 }
 
-func (messages) TextsSince(ctx context.Context, chatID int64, since time.Time) ([]string, error) {
-	rows, err := db.QueryContext(ctx,
+func (r messages) TextsSince(ctx context.Context, chatID int64, since time.Time) ([]string, error) {
+	rows, err := r.db.Query(ctx,
 		`SELECT text FROM messages WHERE chat_id = $1 AND created_at >= $2 ORDER BY created_at ASC, id ASC`,
 		chatID, since)
 	if err != nil {
@@ -216,15 +236,15 @@ func (messages) TextsSince(ctx context.Context, chatID int64, since time.Time) (
 	return texts, rows.Err()
 }
 
-func (messages) LastActivity(ctx context.Context, chatID int64) (sql.NullTime, error) {
+func (r messages) LastActivity(ctx context.Context, chatID int64) (sql.NullTime, error) {
 	var last sql.NullTime
-	err := db.QueryRowContext(ctx,
+	err := r.db.QueryRow(ctx,
 		`SELECT MAX(created_at) FROM messages WHERE chat_id = $1`, chatID).Scan(&last)
 	return last, err
 }
 
-func recentLatestMessages(ctx context.Context, chatID int64) ([]MessageRow, error) {
-	rows, err := db.QueryContext(ctx, `
+func (r messages) recentLatestMessages(ctx context.Context, chatID int64) ([]MessageRow, error) {
+	rows, err := r.db.Query(ctx, `
 		SELECT m.user_id, m.text, u.first_name, u.last_name, u.username, u.is_bot
 		FROM messages m
 		LEFT JOIN users u ON u.id = m.user_id
@@ -238,8 +258,8 @@ func recentLatestMessages(ctx context.Context, chatID int64) ([]MessageRow, erro
 	return scanMessageRows(rows)
 }
 
-func recentLatestMessagesSince(ctx context.Context, chatID int64, since time.Time) ([]MessageRow, error) {
-	rows, err := db.QueryContext(ctx, `
+func (r messages) recentLatestMessagesSince(ctx context.Context, chatID int64, since time.Time) ([]MessageRow, error) {
+	rows, err := r.db.Query(ctx, `
 		SELECT m.user_id, m.text, u.first_name, u.last_name, u.username, u.is_bot
 		FROM messages m
 		LEFT JOIN users u ON u.id = m.user_id
@@ -253,12 +273,12 @@ func recentLatestMessagesSince(ctx context.Context, chatID int64, since time.Tim
 	return scanMessageRows(rows)
 }
 
-func recentLatestMessageText(ctx context.Context, chatID int64) ([]string, error) {
+func (r messages) recentLatestMessageText(ctx context.Context, chatID int64) ([]string, error) {
 	var t string
-	err := db.QueryRowContext(ctx,
+	err := r.db.QueryRow(ctx,
 		`SELECT text FROM messages WHERE chat_id = $1 ORDER BY created_at DESC, id DESC LIMIT 1`,
 		chatID).Scan(&t)
-	if err == sql.ErrNoRows {
+	if err == pgx.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
@@ -267,7 +287,7 @@ func recentLatestMessageText(ctx context.Context, chatID int64) ([]string, error
 	return []string{t}, nil
 }
 
-func scanMessageRows(rows *sql.Rows) ([]MessageRow, error) {
+func scanMessageRows(rows pgx.Rows) ([]MessageRow, error) {
 	var out []MessageRow
 	for rows.Next() {
 		var row MessageRow

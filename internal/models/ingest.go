@@ -6,46 +6,45 @@ import (
 	"fmt"
 
 	tgmodels "github.com/go-telegram/bot/models"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type ingest struct{}
+// ingest provides cross-entity transactional persistence; access via Store.Ingest.
+type ingest struct{ pool *pgxpool.Pool }
 
-// Ingest provides cross-entity transactional persistence.
-var Ingest ingest
-
-func (ingest) EnsureEntities(ctx context.Context, chat *Chat, user *User, left bool) (*Chat, *Participation, error) {
-	tx, err := db.BeginTx(ctx, nil)
+func (r ingest) EnsureEntities(ctx context.Context, chat *Chat, user *User, left bool) (*Chat, *Participation, error) {
+	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
-	defer tx.Rollback() //nolint:errcheck // no-op after commit
+	defer tx.Rollback(ctx) //nolint:errcheck // no-op after commit
 
-	persistedChat, err := upsertChatTx(ctx, tx, chat)
+	persistedChat, err := (chats{db: tx}).Upsert(ctx, chat)
 	if err != nil {
 		return nil, nil, fmt.Errorf("ensure chat: %w", err)
 	}
-	if err := upsertUserTx(ctx, tx, user); err != nil {
+	if _, err := (users{db: tx}).Upsert(ctx, user); err != nil {
 		return nil, nil, fmt.Errorf("ensure user: %w", err)
 	}
-	p, err := ensureParticipationTx(ctx, tx, chat.ID, user.ID, left)
+	p, err := (participations{db: tx}).Ensure(ctx, chat.ID, user.ID, left)
 	if err != nil {
 		return nil, nil, fmt.Errorf("ensure participation: %w", err)
 	}
 
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		return nil, nil, err
 	}
 	return persistedChat, p, nil
 }
 
-func (ingest) EnsureJoin(ctx context.Context, chat *Chat, members []tgmodels.User) (*Chat, error) {
-	tx, err := db.BeginTx(ctx, nil)
+func (r ingest) EnsureJoin(ctx context.Context, chat *Chat, members []tgmodels.User) (*Chat, error) {
+	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback() //nolint:errcheck // no-op after commit
+	defer tx.Rollback(ctx) //nolint:errcheck // no-op after commit
 
-	persistedChat, err := upsertChatTx(ctx, tx, chat)
+	persistedChat, err := (chats{db: tx}).Upsert(ctx, chat)
 	if err != nil {
 		return nil, fmt.Errorf("ensure chat: %w", err)
 	}
@@ -55,34 +54,34 @@ func (ingest) EnsureJoin(ctx context.Context, chat *Chat, members []tgmodels.Use
 			continue
 		}
 		user := userFromTelegram(m)
-		if err := upsertUserTx(ctx, tx, user); err != nil {
+		if _, err := (users{db: tx}).Upsert(ctx, user); err != nil {
 			return nil, fmt.Errorf("ensure user: %w", err)
 		}
-		if _, err := ensureParticipationTx(ctx, tx, chat.ID, user.ID, false); err != nil {
+		if _, err := (participations{db: tx}).Ensure(ctx, chat.ID, user.ID, false); err != nil {
 			return nil, fmt.Errorf("ensure participation: %w", err)
 		}
 	}
 
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
 	return persistedChat, nil
 }
 
-func (ingest) EnsureMember(ctx context.Context, chatID int64, user *User) error {
-	tx, err := db.BeginTx(ctx, nil)
+func (r ingest) EnsureMember(ctx context.Context, chatID int64, user *User) error {
+	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback() //nolint:errcheck // no-op after commit
+	defer tx.Rollback(ctx) //nolint:errcheck // no-op after commit
 
-	if err := upsertUserTx(ctx, tx, user); err != nil {
+	if _, err := (users{db: tx}).Upsert(ctx, user); err != nil {
 		return fmt.Errorf("ensure user: %w", err)
 	}
-	if _, err := ensureParticipationTx(ctx, tx, chatID, user.ID, false); err != nil {
+	if _, err := (participations{db: tx}).Ensure(ctx, chatID, user.ID, false); err != nil {
 		return fmt.Errorf("ensure participation: %w", err)
 	}
-	return tx.Commit()
+	return tx.Commit(ctx)
 }
 
 func userFromTelegram(u *tgmodels.User) *User {

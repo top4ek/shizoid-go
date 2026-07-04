@@ -32,27 +32,20 @@ const (
 
 // Handler toggles captcha for the chat (chat admins / bot owners only).
 func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
-	if update.Message == nil || update.Message.From == nil || !app.Enabled(ctx) || !app.Ready() {
-		return
-	}
 	chatID := update.Message.Chat.ID
 	lang := app.Locale(ctx)
-	if !utils.IsChatAdmin(ctx, b, chatID, update.Message.From.ID) {
-		telegram.Reply(ctx, b, update, locale.T(lang, "common.not_admin"))
-		return
-	}
 
 	payload := strings.TrimSpace(utils.ExtractCommandPayloadText(update))
 	cmd, _, _ := strings.Cut(payload, " ")
 	switch strings.ToLower(cmd) {
 	case "enable":
-		if err := models.Chats.SetCaptcha(ctx, chatID, true); err != nil {
+		if err := app.Store().Chats.SetCaptcha(ctx, chatID, true); err != nil {
 			logger.Instance().Error("captcha enable", zap.Error(err))
 			return
 		}
 		telegram.Reply(ctx, b, update, locale.T(lang, "captcha.enabled"))
 	case "disable":
-		if err := models.Chats.SetCaptcha(ctx, chatID, false); err != nil {
+		if err := app.Store().Chats.SetCaptcha(ctx, chatID, false); err != nil {
 			logger.Instance().Error("captcha disable", zap.Error(err))
 			return
 		}
@@ -72,7 +65,7 @@ func OnMemberJoined(ctx context.Context, b *bot.Bot, chatID int64, member tgmode
 
 func challengeMember(ctx context.Context, b *bot.Bot, chatID int64, lang string, member tgmodels.User) error {
 	if app.Ready() {
-		global, err := models.Users.CaptchaSolved(ctx, member.ID)
+		global, err := app.Store().Users.CaptchaSolved(ctx, member.ID)
 		if err != nil {
 			return err
 		}
@@ -81,9 +74,9 @@ func challengeMember(ctx context.Context, b *bot.Bot, chatID int64, lang string,
 				zap.Int64("chat_id", chatID),
 				zap.Int64("user_id", member.ID),
 			)
-			return models.Participations.MarkCaptchaSolved(ctx, chatID, member.ID)
+			return app.Store().Participations.MarkCaptchaSolved(ctx, chatID, member.ID)
 		}
-		solved, err := models.Participations.CaptchaSolved(ctx, chatID, member.ID)
+		solved, err := app.Store().Participations.CaptchaSolved(ctx, chatID, member.ID)
 		if err != nil {
 			return err
 		}
@@ -94,7 +87,7 @@ func challengeMember(ctx context.Context, b *bot.Bot, chatID int64, lang string,
 			)
 			return nil
 		}
-		claimed, err := models.Participations.TryClaimCaptcha(ctx, chatID, member.ID)
+		claimed, err := app.Store().Participations.TryClaimCaptcha(ctx, chatID, member.ID)
 		if err != nil {
 			return err
 		}
@@ -115,7 +108,7 @@ func challengeMember(ctx context.Context, b *bot.Bot, chatID int64, lang string,
 	correct, buttons, err := buildChallenge(lang)
 	if err != nil {
 		if app.Ready() {
-			_ = models.Participations.ClearCaptcha(ctx, chatID, member.ID)
+			_ = app.Store().Participations.ClearCaptcha(ctx, chatID, member.ID)
 		}
 		return err
 	}
@@ -141,7 +134,7 @@ func challengeMember(ctx context.Context, b *bot.Bot, chatID int64, lang string,
 	})
 	if err != nil {
 		if app.Ready() {
-			_ = models.Participations.ClearCaptcha(ctx, chatID, member.ID)
+			_ = app.Store().Participations.ClearCaptcha(ctx, chatID, member.ID)
 		}
 		return err
 	}
@@ -153,7 +146,7 @@ func challengeMember(ctx context.Context, b *bot.Bot, chatID int64, lang string,
 	)
 
 	if app.Ready() && sent != nil {
-		if err := models.Participations.SetCaptchaDetails(ctx, chatID, member.ID, correct.Emoji, sent.ID); err != nil {
+		if err := app.Store().Participations.SetCaptchaDetails(ctx, chatID, member.ID, correct.Emoji, sent.ID); err != nil {
 			return err
 		}
 		logger.Instance().Debug("captcha challenge: persisted",
@@ -195,7 +188,7 @@ func Callback(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 		return
 	}
 
-	correctEmoji, messageID, pending, err := models.Participations.GetCaptchaPending(ctx, chatID, targetID)
+	correctEmoji, messageID, pending, err := app.Store().Participations.GetCaptchaPending(ctx, chatID, targetID)
 	if err != nil {
 		logger.Instance().Error("captcha get pending", zap.Error(err))
 		_, _ = b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
@@ -221,7 +214,7 @@ func Callback(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 	}
 
 	user := userFromTelegram(&cq.From)
-	if err := models.Ingest.EnsureMember(ctx, chatID, user); err != nil {
+	if err := app.Store().Ingest.EnsureMember(ctx, chatID, user); err != nil {
 		logger.Instance().Error("captcha ensure member", zap.Error(err))
 		_, _ = b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
 			CallbackQueryID: cq.ID,
@@ -230,7 +223,7 @@ func Callback(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 		})
 		return
 	}
-	if err := models.Participations.MarkCaptchaSolved(ctx, chatID, targetID); err != nil {
+	if err := app.Store().Participations.MarkCaptchaSolved(ctx, chatID, targetID); err != nil {
 		logger.Instance().Error("captcha mark participation", zap.Error(err))
 		_, _ = b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
 			CallbackQueryID: cq.ID,
@@ -239,7 +232,7 @@ func Callback(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 		})
 		return
 	}
-	if err := models.Users.MarkCaptchaSolved(ctx, targetID); err != nil {
+	if err := app.Store().Users.MarkCaptchaSolved(ctx, targetID); err != nil {
 		logger.Instance().Error("captcha mark user", zap.Error(err))
 	}
 
@@ -260,7 +253,7 @@ func ExpirePending(ctx context.Context, b *bot.Bot) {
 	if !app.Ready() {
 		return
 	}
-	pending, err := models.Participations.ExpiredPending(ctx, time.Minute)
+	pending, err := app.Store().Participations.ExpiredPending(ctx, time.Minute)
 	if err != nil {
 		logger.Instance().Error("captcha expired pending", zap.Error(err))
 		return
@@ -280,7 +273,7 @@ func failCaptcha(ctx context.Context, b *bot.Bot, chatID, userID int64, messageI
 		deleteCaptchaMessage(ctx, b, chatID, messageID)
 	}
 	if app.Ready() {
-		if err := models.Participations.ClearCaptcha(ctx, chatID, userID); err != nil {
+		if err := app.Store().Participations.ClearCaptcha(ctx, chatID, userID); err != nil {
 			logger.Instance().Error("captcha clear", zap.Error(err))
 		}
 	}
@@ -301,7 +294,7 @@ func callbackLocale(ctx context.Context, chatID int64) string {
 	if !app.Ready() {
 		return app.Locale(ctx)
 	}
-	chat, err := models.Chats.Get(ctx, chatID)
+	chat, err := app.Store().Chats.Get(ctx, chatID)
 	if err != nil || chat == nil {
 		return app.Locale(ctx)
 	}

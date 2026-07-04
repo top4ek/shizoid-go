@@ -61,6 +61,16 @@ func ensureLoaded() {
 	})
 }
 
+// Load eagerly loads the embedded locales and fails when none parsed, so a
+// broken bundle is caught at startup instead of degrading to key-echo.
+func Load() error {
+	ensureLoaded()
+	if len(available) == 0 {
+		return fmt.Errorf("locale: no locales loaded")
+	}
+	return nil
+}
+
 // Available returns the sorted list of available locale codes.
 func Available() []string {
 	ensureLoaded()
@@ -94,17 +104,30 @@ func lookup(lang, key string) (any, bool) {
 	return cur, true
 }
 
-// T returns the translated, interpolated string for the dotted key.
+// fallbackLang is the locale guaranteed to carry every key; T falls back to it
+// before echoing the raw key to the user.
+const fallbackLang = "ru"
+
+// T returns the translated, interpolated string for the dotted key, falling
+// back to the fallback locale when the key is missing in lang.
 func T(lang, key string, vars ...any) string {
-	v, ok := lookup(lang, key)
-	if !ok {
-		return key
+	s, ok := lookupString(lang, key)
+	if !ok && lang != fallbackLang {
+		s, ok = lookupString(fallbackLang, key)
 	}
-	s, ok := v.(string)
 	if !ok {
 		return key
 	}
 	return interpolate(s, toVarMap(vars))
+}
+
+func lookupString(lang, key string) (string, bool) {
+	v, ok := lookup(lang, key)
+	if !ok {
+		return "", false
+	}
+	s, ok := v.(string)
+	return s, ok
 }
 
 // List returns the string slice for the dotted key (nil if absent).
@@ -204,7 +227,7 @@ func interpolate(s string, vars map[string]any) string {
 		b.WriteString(s[:start])
 		name := s[start+2 : end]
 		if val, ok := vars[name]; ok {
-			b.WriteString(fmt.Sprint(val))
+			fmt.Fprint(&b, val)
 		} else {
 			b.WriteString(s[start : end+1])
 		}

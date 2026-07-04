@@ -2,7 +2,8 @@ package models
 
 import (
 	"context"
-	"database/sql"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // Greeting represents the greetings table.
@@ -12,23 +13,20 @@ type Greeting struct {
 	Text   string `db:"text"`
 }
 
-type greetings struct{}
+type greetings struct{ db DBTX }
 
-// Greetings provides persistence operations for greetings.
-var Greetings greetings
-
-func (greetings) Set(ctx context.Context, chatID int64, text string) error {
-	_, err := db.ExecContext(ctx,
+func (r greetings) Set(ctx context.Context, chatID int64, text string) error {
+	_, err := r.db.Exec(ctx,
 		`INSERT INTO greetings (chat_id, text) VALUES ($1, $2)
 		 ON CONFLICT (chat_id) DO UPDATE SET text = EXCLUDED.text`,
 		chatID, text)
 	return err
 }
 
-func (greetings) Get(ctx context.Context, chatID int64) (string, bool, error) {
+func (r greetings) Get(ctx context.Context, chatID int64) (string, bool, error) {
 	var text string
-	err := db.QueryRowContext(ctx, `SELECT text FROM greetings WHERE chat_id = $1`, chatID).Scan(&text)
-	if err == sql.ErrNoRows {
+	err := r.db.QueryRow(ctx, `SELECT text FROM greetings WHERE chat_id = $1`, chatID).Scan(&text)
+	if err == pgx.ErrNoRows {
 		return "", false, nil
 	}
 	if err != nil {
@@ -37,7 +35,7 @@ func (greetings) Get(ctx context.Context, chatID int64) (string, bool, error) {
 	return text, true, nil
 }
 
-func (greetings) Delete(ctx context.Context, chatID int64) error {
-	_, err := db.ExecContext(ctx, `DELETE FROM greetings WHERE chat_id = $1`, chatID)
+func (r greetings) Delete(ctx context.Context, chatID int64) error {
+	_, err := r.db.Exec(ctx, `DELETE FROM greetings WHERE chat_id = $1`, chatID)
 	return err
 }

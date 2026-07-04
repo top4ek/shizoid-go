@@ -3,12 +3,12 @@ package app
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -31,16 +31,17 @@ func loadTestConfig(t *testing.T, yamlBody string) {
 }
 
 func TestReady(t *testing.T) {
-	models.Init(nil)
 	assert.False(t, Ready())
 
-	db, err := sql.Open("postgres", "host=invalid")
+	// pgxpool connects lazily, so an unreachable host still yields a pool.
+	pool, err := pgxpool.New(context.Background(), "host=invalid")
 	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
+	t.Cleanup(pool.Close)
 
-	Init(db)
+	Init(pool)
 	assert.True(t, Ready())
 	assert.NotNil(t, Gen())
+	assert.NotNil(t, Store())
 }
 
 func TestIsOwner(t *testing.T) {
@@ -133,12 +134,12 @@ app:
 	ctx := context.Background()
 	assert.True(t, Enabled(ctx))
 
-	loadTestConfig(t, fmt.Sprintf(`
+	loadTestConfig(t, `
 telegram:
   token: "123:ABC"
 app:
   allow_to_all: false
-`))
+`)
 
 	active := &models.Chat{ActiveAt: sql.NullTime{Time: time.Now(), Valid: true}}
 	ctx = WithChat(context.Background(), active)

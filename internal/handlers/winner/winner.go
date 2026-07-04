@@ -53,13 +53,13 @@ func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 
 func enable(ctx context.Context, b *bot.Bot, update *tgmodels.Update, chatID int64, label, lang string) {
 	if !utils.IsChatAdmin(ctx, b, chatID, update.Message.From.ID) {
-		telegram.Reply(ctx, b, update, locale.T(lang, "common.not_admin"))
+		telegram.Reply(ctx, b, update, locale.Random(lang, "nok"))
 		return
 	}
 	if label == "" {
 		label = locale.T(lang, "winner.default")
 	}
-	if err := models.Chats.SetWinner(ctx, chatID, sql.NullString{String: label, Valid: true}); err != nil {
+	if err := app.Store().Chats.SetWinner(ctx, chatID, sql.NullString{String: label, Valid: true}); err != nil {
 		logger.Instance().Error("winner enable", zap.Error(err))
 		return
 	}
@@ -68,10 +68,10 @@ func enable(ctx context.Context, b *bot.Bot, update *tgmodels.Update, chatID int
 
 func disable(ctx context.Context, b *bot.Bot, update *tgmodels.Update, chatID int64, lang string) {
 	if !utils.IsChatAdmin(ctx, b, chatID, update.Message.From.ID) {
-		telegram.Reply(ctx, b, update, locale.T(lang, "common.not_admin"))
+		telegram.Reply(ctx, b, update, locale.Random(lang, "nok"))
 		return
 	}
-	if err := models.Chats.SetWinner(ctx, chatID, sql.NullString{}); err != nil {
+	if err := app.Store().Chats.SetWinner(ctx, chatID, sql.NullString{}); err != nil {
 		logger.Instance().Error("winner disable", zap.Error(err))
 		return
 	}
@@ -83,7 +83,7 @@ func markdownPlain(s string) string {
 }
 
 func currentStats(ctx context.Context, chatID int64, lang string) string {
-	entries, err := models.Participations.TopByScore(ctx, chatID, 10)
+	entries, err := app.Store().Participations.TopByScore(ctx, chatID, 10)
 	if err != nil {
 		logger.Instance().Error("winner current", zap.Error(err))
 		return markdownPlain(locale.T(lang, "winner.no_one"))
@@ -95,14 +95,14 @@ func currentStats(ctx context.Context, chatID int64, lang string) string {
 }
 
 func previousWinner(ctx context.Context, chatID int64, lang string) string {
-	userID, username, name, ok, err := models.Winners.LastWinner(ctx, chatID)
+	userID, username, name, ok, err := app.Store().Winners.LastWinner(ctx, chatID)
 	if err != nil {
 		logger.Instance().Error("winner last", zap.Error(err))
 	}
 	if !ok || name == "" {
 		return markdownPlain(locale.T(lang, "winner.no_one"))
 	}
-	entries, err := models.Winners.TopOfYear(ctx, chatID, 10)
+	entries, err := app.Store().Winners.TopOfYear(ctx, chatID, 10)
 	if err != nil {
 		logger.Instance().Error("winner top year", zap.Error(err))
 	}

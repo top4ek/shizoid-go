@@ -7,6 +7,32 @@ on:
   pull_request:
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check formatting
+        run: task fmt
+
+      - name: go vet
+        run: task vet
+
+      - name: Install golangci-lint
+        run: task lint-install
+
+      - name: golangci-lint
+        run: task lint
+
   test:
     runs-on: ubuntu-latest
     steps:
@@ -16,12 +42,34 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Run tests
-        run: go test ./...
+      - uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run tests (unit + dockerized integration)
+        run: task test
+
+  vuln:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: govulncheck
+        run: task vuln
 
   docker:
     runs-on: ubuntu-latest
-    needs: test
+    needs: [lint, test]
     if: github.event_name == 'push' && github.ref_name == 'main'
     steps:
       - uses: actions/checkout@v4

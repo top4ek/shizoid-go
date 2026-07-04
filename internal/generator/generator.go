@@ -24,12 +24,13 @@ const (
 var sentenceEnders = map[rune]struct{}{'.': {}, '!': {}, '?': {}, '…': {}}
 
 type Generator struct {
+	store  *models.Store
 	neural *neural.Client
 	botID  int64
 }
 
-func New(n *neural.Client) *Generator {
-	return &Generator{neural: n}
+func New(store *models.Store, n *neural.Client) *Generator {
+	return &Generator{store: store, neural: n}
 }
 
 // SetBotID records the bot's Telegram user id for role assignment in neural history.
@@ -85,10 +86,7 @@ func (g *Generator) Learn(ctx context.Context, chatID int64, text string) error 
 	if len(tokens) == 0 {
 		return nil
 	}
-	if err := models.Words.EnsureWords(ctx, tokens); err != nil {
-		return err
-	}
-	idMap, err := models.Words.ToIDs(ctx, tokens)
+	idMap, err := g.store.Words.EnsureIDs(ctx, tokens)
 	if err != nil {
 		return err
 	}
@@ -109,6 +107,7 @@ func (g *Generator) Learn(ctx context.Context, chatID int64, text string) error 
 		seq = append(seq, null)
 	}
 
+	var trigrams []models.Trigram
 	for len(seq) > 0 {
 		first := seq[0]
 		second := at(seq, 1)
@@ -118,11 +117,9 @@ func (g *Generator) Learn(ctx context.Context, chatID int64, text string) error 
 			continue
 		}
 		seq = seq[1:]
-		if err := models.Pairs.LearnTrigram(ctx, chatID, first, second, third); err != nil {
-			return err
-		}
+		trigrams = append(trigrams, models.Trigram{First: first, Second: second, Third: third})
 	}
-	return nil
+	return g.store.Pairs.LearnTrigrams(ctx, chatID, trigrams)
 }
 
 func (g *Generator) buildSentence(ctx context.Context, chat *models.Chat, seedIDs []int64, simplified bool) (string, error) {
@@ -135,7 +132,7 @@ func (g *Generator) buildSentence(ctx context.Context, chat *models.Chat, seedID
 
 	var ids []sql.NullInt64
 	for len(ids) < safetyCounter {
-		pair, err := models.Pairs.FetchPair(ctx, chat.ID, first, second)
+		pair, err := g.store.Pairs.FetchPair(ctx, chat.ID, first, second)
 		if err != nil {
 			return "", err
 		}
@@ -171,7 +168,7 @@ func (g *Generator) idsToSentence(ctx context.Context, ids []sql.NullInt64) (str
 	if len(valid) == 0 {
 		return "", nil
 	}
-	wordsByID, err := models.Words.ToWords(ctx, valid)
+	wordsByID, err := g.store.Words.ToWords(ctx, valid)
 	if err != nil {
 		return "", err
 	}
@@ -188,7 +185,7 @@ func (g *Generator) idsOf(ctx context.Context, words []string) ([]int64, error) 
 	if len(words) == 0 {
 		return nil, nil
 	}
-	idMap, err := models.Words.ToIDs(ctx, words)
+	idMap, err := g.store.Words.ToIDs(ctx, words)
 	if err != nil {
 		return nil, err
 	}
@@ -202,7 +199,7 @@ func (g *Generator) idsOf(ctx context.Context, words []string) ([]int64, error) 
 }
 
 func (g *Generator) contextIDs(ctx context.Context, chat *models.Chat) ([]int64, error) {
-	texts, err := models.Messages.RecentTextsByBytes(ctx, chat.ID, config.MaxReplyContextBytes)
+	texts, err := g.store.Messages.RecentTextsByBytes(ctx, chat.ID, config.MaxReplyContextBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -262,9 +259,9 @@ func (g *Generator) neuralHistory(ctx context.Context, chat *models.Chat, curren
 	var rows []models.MessageRow
 	var err error
 	if since, ok := historySince(chat); ok {
-		rows, err = models.Messages.RecentByBytesSince(ctx, chat.ID, since, config.MaxReplyContextBytes)
+		rows, err = g.store.Messages.RecentByBytesSince(ctx, chat.ID, since, config.MaxReplyContextBytes)
 	} else {
-		rows, err = models.Messages.RecentByBytes(ctx, chat.ID, config.MaxReplyContextBytes)
+		rows, err = g.store.Messages.RecentByBytes(ctx, chat.ID, config.MaxReplyContextBytes)
 	}
 	if err != nil {
 		return appendCurrentMessage(nil, currentUser, currentUserID, 0)

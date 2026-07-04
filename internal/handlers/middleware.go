@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-telegram/bot"
@@ -14,8 +15,8 @@ import (
 	"shizoid/internal/app"
 	"shizoid/internal/config"
 	"shizoid/internal/logger"
-	"shizoid/internal/sentry"
 	"shizoid/internal/models"
+	"shizoid/internal/sentry"
 )
 
 func LogUpdate(next bot.HandlerFunc) bot.HandlerFunc {
@@ -139,7 +140,7 @@ func Ingest(next bot.HandlerFunc) bot.HandlerFunc {
 		user := userModel(msg.From)
 		left := msg.LeftChatMember != nil && msg.LeftChatMember.ID == msg.From.ID
 
-		persistedChat, participation, err := models.Ingest.EnsureEntities(ctx, chat, user, left)
+		persistedChat, participation, err := app.Store().Ingest.EnsureEntities(ctx, chat, user, left)
 		if err != nil {
 			logger.Instance().Error("ingest ensure", zap.Error(err))
 			next(ctx, b, update)
@@ -152,9 +153,32 @@ func Ingest(next bot.HandlerFunc) bot.HandlerFunc {
 			ctx = app.WithSkipMessageHistory(ctx)
 		}
 
+		statsWG.Add(1)
 		go runCollectStats(persistedChat, msg)
 
 		next(ctx, b, update)
+	}
+}
+
+// statsSem bounds concurrent background stat writes so a traffic burst cannot
+// saturate the DB pool; statsWG lets shutdown wait for in-flight writes.
+var (
+	statsWG  sync.WaitGroup
+	statsSem = make(chan struct{}, 16)
+)
+
+// WaitCollectStats blocks until background stat writes finish or the timeout
+// elapses; called on shutdown so learn/append/score writes are not lost.
+func WaitCollectStats(timeout time.Duration) {
+	done := make(chan struct{})
+	go func() {
+		statsWG.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(timeout):
+		logger.Instance().Warn("collectStats wait timed out, writes still in flight")
 	}
 }
 
@@ -164,7 +188,7 @@ func ingestJoin(ctx context.Context, b *bot.Bot, update *tgmodels.Update, chat *
 		zap.Int64("chat_id", chat.ID),
 		zap.Int("members_count", len(members)),
 	)
-	persisted, err := models.Ingest.EnsureJoin(ctx, chat, members)
+	persisted, err := app.Store().Ingest.EnsureJoin(ctx, chat, members)
 	if err != nil {
 		logger.Instance().Error("ingest join", zap.String("source", source), zap.Error(err))
 	} else if persisted != nil {
@@ -174,6 +198,9 @@ func ingestJoin(ctx context.Context, b *bot.Bot, update *tgmodels.Update, chat *
 }
 
 func runCollectStats(chat *models.Chat, msg *tgmodels.Message) {
+	defer statsWG.Done()
+	statsSem <- struct{}{}
+	defer func() { <-statsSem }()
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Instance().Error("collectStats panic", zap.Any("panic", r))
@@ -196,7 +223,7 @@ func collectStats(chat *models.Chat, msg *tgmodels.Message) {
 		if err := app.Gen().Learn(bgCtx, chat.ID, msg.Text); err != nil {
 			logger.Instance().Error("learn", zap.Error(err))
 		}
-		if err := models.Messages.Append(bgCtx, chat.ID, msg.From.ID, msg.Text); err != nil {
+		if err := app.Store().Messages.Append(bgCtx, chat.ID, msg.From.ID, msg.Text); err != nil {
 			logger.Instance().Error("messages append", zap.Error(err))
 		}
 	}
@@ -204,7 +231,7 @@ func collectStats(chat *models.Chat, msg *tgmodels.Message) {
 	if chat.WinnerEnabled() && msg.Text != "" {
 		delta := len(strings.Fields(msg.Text))
 		if delta > 0 {
-			if err := models.Participations.IncrScore(bgCtx, chat.ID, msg.From.ID, delta); err != nil {
+			if err := app.Store().Participations.IncrScore(bgCtx, chat.ID, msg.From.ID, delta); err != nil {
 				logger.Instance().Error("incr score", zap.Error(err))
 			}
 		}

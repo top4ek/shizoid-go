@@ -28,9 +28,9 @@ do not need to ship SQL or YAML files separately.
 
 ## Requirements
 
-- Go 1.25+
-- PostgreSQL 18+ (uses `UNIQUE NULLS NOT DISTINCT`)
-- Docker (optional, for production deployment)
+- Go 1.26+
+- PostgreSQL 18+ (uses `UNIQUE NULLS NOT DISTINCT`); the app connects via [pgx](https://github.com/jackc/pgx)
+- Docker (optional: production deployment and integration tests)
 
 ## Configuration
 
@@ -46,8 +46,12 @@ and [`build/dev/config.yaml-example`](build/dev/config.yaml-example) for local d
 | `app` | `bot_owners` | — | Owner Telegram user IDs |
 | `database` | `*` | — | Postgres host/port/name/user/password |
 | `app` | `generation_mode` | `neural` | Default mode for new chats |
-| `app` | `winner_cron` | `20 4 * * *` | Daily winner draw (04:20) |
-| `app` | `memory_cron` | `0 */6 * * *` | Memory summarization for all active chats (messages since last `memory_summarized_at`) |
+| `app` | `bind_to` | `3000` | Webhook/health HTTP port (prod example uses `8095`) |
+| `app` | `locale` | `ru` | Default locale for new chats |
+| `app` | `winner_cron` | `20 1 * * *` | Daily winner draw (01:20) |
+| `app` | `idle_cron` | `0 * * * *` | Hourly idle-chat poke sweep |
+| `app` | `captcha_cron` | `@every 1m` | Expiry sweep for pending captchas |
+| `app` | `memory_cron` | `0 */3 * * *` | Memory summarization for all active chats (messages since last `memory_summarized_at`) |
 | `app` | `allow_to_all` | `false` | Reply in all chats without `/start` |
 | `app` | `app_prompt` / `summary_prompt` | see example | Neural system / memory prompts |
 | `telegram` | `webhook_url` | — | Webhook mode URL; empty = long polling (`deleteWebhook` on startup) |
@@ -82,7 +86,7 @@ docker compose up -d
 Then open your group chat in Telegram and send `/start` to activate the bot.
 
 **Webhook mode:** set `telegram.webhook_url` in `config.yaml`, expose `app.bind_to`
-(default `8095`) on the host, and add a `ports` mapping to `docker-compose.yaml`.
+(`8095` in the prod example) on the host, and add a `ports` mapping to `docker-compose.yaml`.
 On startup the bot calls Telegram `setWebhook` with that URL and a
 `webhook_secret_token` (auto-generated if omitted). With an empty `webhook_url` it calls `deleteWebhook`
 and runs long polling.
@@ -109,14 +113,21 @@ Official images are published to [Docker Hub](https://hub.docker.com/r/top4ek/sh
 
 ## Development (Docker)
 
+Developer commands are defined in [`Taskfile.yml`](Taskfile.yml) — the single source
+of truth, run locally and in CI via [Task](https://taskfile.dev). See `task --list`
+for everything available.
+
 Hot reload with reflex + Delve debugger:
 
 ```bash
-cp build/dev/config.yaml-example build/dev/config.yaml   # then edit values
-cp build/dev/.env-example build/dev/.env                 # postgres + llama only
-docker compose up --build
+task dev
 ```
 
+On first run it copies `build/dev/.env-example` to `build/dev/.env` (and the container
+entrypoint copies `config.yaml-example` to `config.yaml`) — edit both with your values
+(`telegram.token`, `POSTGRES_*`, `LLAMA_ARG_*`). `task dev-down` stops the stack.
+
+Without Task: `docker compose up --build` after copying the two files yourself.
 Docker infra (`postgres`, `llama`) uses `build/dev/.env` for `POSTGRES_*` and `LLAMA_ARG_*` variables.
 
 ## Run locally (without Docker)
@@ -186,16 +197,26 @@ go run ./cmd/app -config build/dev/config.yaml -migrate-only
 ## Test
 
 ```bash
-go test ./...
+task              # build + vet + test
+task test         # unit + integration (integration spins up Postgres via testcontainers, needs docker)
+task test-short   # unit tests only
+task ci           # everything CI runs: gofmt check, go vet, golangci-lint, go test -race, govulncheck
 ```
+
+CI runs the same task commands, so a green `task ci` locally means a green pipeline
+(`task lint-install` installs the pinned golangci-lint if you don't have it).
+Without Task: `go test ./...` / `go test -short ./...`.
 
 In the dev container, `reflex` re-runs the package's tests on every file change.
 
 ## Develop
 
 - Handlers live in `internal/handlers/<name>`; register them in
-  `internal/handlers/handlers.go`.
-- Data access is in `internal/models` (raw SQL, no ORM).
+  `internal/handlers/handlers.go` and declare the required permission
+  (`roleEveryone`/`roleAdmin`/`roleOwner`) plus ready/enabled flags there —
+  the registry gate enforces them centrally.
+- Data access is in `internal/models` (raw SQL over pgx, no ORM); repositories
+  hang off `models.Store`, reachable in handlers via `app.Store()`.
 - Text generation/learning is in `internal/generator`.
 - Localized strings are embedded YAML in `internal/locale/locales/`.
 - Schema changes: add a new goose migration in `internal/migrations/sql/`.

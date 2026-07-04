@@ -29,6 +29,14 @@ func Init() {
 		Dsn:         config.Sentry.DSN,
 		Environment: config.Sentry.Environment,
 		Release:     release,
+		// Chat messages are PII; never attach user identity or request
+		// payloads to events.
+		SendDefaultPII: false,
+		BeforeSend: func(event *sentry.Event, _ *sentry.EventHint) *sentry.Event {
+			event.User = sentry.User{}
+			event.Request = nil
+			return event
+		},
 	}); err != nil {
 		logger.Instance().Error("sentry init", zap.Error(err))
 	}

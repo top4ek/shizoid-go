@@ -13,7 +13,6 @@ import (
 	"shizoid/internal/app"
 	"shizoid/internal/locale"
 	"shizoid/internal/logger"
-	"shizoid/internal/models"
 	"shizoid/internal/telegram"
 	"shizoid/internal/utils"
 )
@@ -26,19 +25,11 @@ const (
 )
 
 func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
-	if update.Message == nil || update.Message.From == nil || !app.Enabled(ctx) || !app.Ready() {
-		return
-	}
 	chat := app.ChatFrom(ctx)
 	if chat == nil {
 		return
 	}
 	lang := app.Locale(ctx)
-	chatID := update.Message.Chat.ID
-	if !utils.IsChatAdmin(ctx, b, chatID, update.Message.From.ID) {
-		telegram.Reply(ctx, b, update, locale.T(lang, "common.not_admin"))
-		return
-	}
 
 	payload := strings.TrimSpace(utils.ExtractCommandPayloadText(update))
 
@@ -52,7 +43,7 @@ func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 		telegram.Reply(ctx, b, update, locale.T(lang, "gab.error"))
 		return
 	}
-	if err := models.Chats.SetRandom(ctx, chat.ID, value); err != nil {
+	if err := app.Store().Chats.SetRandom(ctx, chat.ID, value); err != nil {
 		logger.Instance().Error("set gab", zap.Error(err))
 		return
 	}

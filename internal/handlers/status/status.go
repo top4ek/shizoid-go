@@ -32,7 +32,7 @@ func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 		return
 	}
 	lang := app.Locale(ctx)
-	pairs, err := models.Chats.PairsCount(ctx, chat.ID)
+	pairs, err := app.Store().Chats.PairsCount(ctx, chat.ID)
 	if err != nil {
 		logger.Instance().Error("status pairs", zap.Error(err))
 	}

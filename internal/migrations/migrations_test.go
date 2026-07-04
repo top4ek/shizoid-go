@@ -5,7 +5,7 @@ import (
 	"io/fs"
 	"testing"
 
-	_ "github.com/lib/pq"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -26,7 +26,7 @@ func TestEmbeddedMigrations(t *testing.T) {
 }
 
 func TestRunRequiresDB(t *testing.T) {
-	db, err := sql.Open("postgres", "host=invalid")
+	db, err := sql.Open("pgx", "host=invalid")
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
 

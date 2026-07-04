@@ -12,42 +12,32 @@ type Word struct {
 	Word string `db:"word"`
 }
 
-type words struct{}
+type words struct{ db DBTX }
 
-// Words provides persistence operations for words.
-var Words words
-
-func (words) EnsureWords(ctx context.Context, list []string) error {
+func (r words) EnsureWords(ctx context.Context, list []string) error {
 	uniq := uniqueNonEmpty(list)
 	if len(uniq) == 0 {
 		return nil
 	}
-	placeholders := make([]string, len(uniq))
-	args := make([]any, len(uniq))
-	for i, w := range uniq {
-		placeholders[i] = "($" + strconv.Itoa(i+1) + ")"
-		args[i] = w
-	}
-	q := `INSERT INTO words (word) VALUES ` + strings.Join(placeholders, ",") +
-		` ON CONFLICT (word) DO NOTHING`
-	_, err := db.ExecContext(ctx, q, args...)
+	_, err := r.db.Exec(ctx,
+		`INSERT INTO words (word) SELECT unnest($1::text[]) ON CONFLICT (word) DO NOTHING`,
+		uniq)
 	return err
 }
 
-func (words) ToIDs(ctx context.Context, list []string) (map[string]int64, error) {
+// EnsureIDs upserts the words and returns their ids in one round-trip
+// (the no-op DO UPDATE makes RETURNING yield pre-existing rows too).
+func (r words) EnsureIDs(ctx context.Context, list []string) (map[string]int64, error) {
 	uniq := uniqueNonEmpty(list)
 	out := make(map[string]int64, len(uniq))
 	if len(uniq) == 0 {
 		return out, nil
 	}
-	placeholders := make([]string, len(uniq))
-	args := make([]any, len(uniq))
-	for i, w := range uniq {
-		placeholders[i] = "$" + strconv.Itoa(i+1)
-		args[i] = w
-	}
-	q := `SELECT id, word FROM words WHERE word IN (` + strings.Join(placeholders, ",") + `)`
-	rows, err := db.QueryContext(ctx, q, args...)
+	rows, err := r.db.Query(ctx, `
+		INSERT INTO words (word)
+		SELECT unnest($1::text[])
+		ON CONFLICT (word) DO UPDATE SET word = EXCLUDED.word
+		RETURNING id, word`, uniq)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +53,36 @@ func (words) ToIDs(ctx context.Context, list []string) (map[string]int64, error)
 	return out, rows.Err()
 }
 
-func (words) ToWords(ctx context.Context, ids []int64) (map[int64]string, error) {
+func (r words) ToIDs(ctx context.Context, list []string) (map[string]int64, error) {
+	uniq := uniqueNonEmpty(list)
+	out := make(map[string]int64, len(uniq))
+	if len(uniq) == 0 {
+		return out, nil
+	}
+	placeholders := make([]string, len(uniq))
+	args := make([]any, len(uniq))
+	for i, w := range uniq {
+		placeholders[i] = "$" + strconv.Itoa(i+1)
+		args[i] = w
+	}
+	q := `SELECT id, word FROM words WHERE word IN (` + strings.Join(placeholders, ",") + `)`
+	rows, err := r.db.Query(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int64
+		var word string
+		if err := rows.Scan(&id, &word); err != nil {
+			return nil, err
+		}
+		out[word] = id
+	}
+	return out, rows.Err()
+}
+
+func (r words) ToWords(ctx context.Context, ids []int64) (map[int64]string, error) {
 	out := make(map[int64]string, len(ids))
 	uniq := uniqueIDs(ids)
 	if len(uniq) == 0 {
@@ -76,7 +95,7 @@ func (words) ToWords(ctx context.Context, ids []int64) (map[int64]string, error)
 		args[i] = id
 	}
 	q := `SELECT id, word FROM words WHERE id IN (` + strings.Join(placeholders, ",") + `)`
-	rows, err := db.QueryContext(ctx, q, args...)
+	rows, err := r.db.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}

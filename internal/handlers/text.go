@@ -29,7 +29,7 @@ func DefaultHandler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 		return
 	}
 
-	if msg.Text == "" || isBotCommand(msg) {
+	if msg.Text == "" || msg.From == nil || isBotCommand(msg) {
 		return
 	}
 	if !app.Ready() || !app.Enabled(ctx) {
