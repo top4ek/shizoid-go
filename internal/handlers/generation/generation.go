@@ -45,7 +45,7 @@ func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 		telegram.Reply(ctx, b, update, locale.T(lang, "generation.unknown", "list", modes))
 	case generationSet:
 		if !utils.IsChatAdmin(ctx, b, chat.ID, userID) {
-			telegram.Reply(ctx, b, update, locale.T(lang, "common.not_admin"))
+			telegram.Reply(ctx, b, update, locale.Random(lang, "nok"))
 			return
 		}
 		if err := app.Store().Chats.SetGenerationMode(ctx, chat.ID, mode); err != nil {

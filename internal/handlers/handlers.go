@@ -108,14 +108,14 @@ func gate(c command) bot.HandlerFunc {
 		case roleAdmin:
 			if !utils.IsChatAdmin(ctx, b, msg.Chat.ID, msg.From.ID) {
 				if c.replyOnDeny {
-					telegram.Reply(ctx, b, update, locale.T(app.Locale(ctx), "common.not_admin"))
+					telegram.Reply(ctx, b, update, locale.Random(app.Locale(ctx), "nok"))
 				}
 				return
 			}
 		case roleOwner:
 			if !app.IsOwner(msg.From.ID) {
 				if c.replyOnDeny {
-					telegram.Reply(ctx, b, update, locale.T(app.Locale(ctx), "common.not_owner"))
+					telegram.Reply(ctx, b, update, locale.Random(app.Locale(ctx), "nok"))
 				}
 				return
 			}

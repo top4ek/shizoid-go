@@ -53,7 +53,7 @@ func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 
 func enable(ctx context.Context, b *bot.Bot, update *tgmodels.Update, chatID int64, label, lang string) {
 	if !utils.IsChatAdmin(ctx, b, chatID, update.Message.From.ID) {
-		telegram.Reply(ctx, b, update, locale.T(lang, "common.not_admin"))
+		telegram.Reply(ctx, b, update, locale.Random(lang, "nok"))
 		return
 	}
 	if label == "" {
@@ -68,7 +68,7 @@ func enable(ctx context.Context, b *bot.Bot, update *tgmodels.Update, chatID int
 
 func disable(ctx context.Context, b *bot.Bot, update *tgmodels.Update, chatID int64, lang string) {
 	if !utils.IsChatAdmin(ctx, b, chatID, update.Message.From.ID) {
-		telegram.Reply(ctx, b, update, locale.T(lang, "common.not_admin"))
+		telegram.Reply(ctx, b, update, locale.Random(lang, "nok"))
 		return
 	}
 	if err := app.Store().Chats.SetWinner(ctx, chatID, sql.NullString{}); err != nil {
