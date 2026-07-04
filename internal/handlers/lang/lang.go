@@ -11,7 +11,6 @@ import (
 	"shizoid/internal/app"
 	"shizoid/internal/locale"
 	"shizoid/internal/logger"
-	"shizoid/internal/models"
 	"shizoid/internal/telegram"
 	"shizoid/internal/utils"
 )
@@ -47,7 +46,7 @@ func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 		telegram.Reply(ctx, b, update, locale.T(lang, "common.not_admin"))
 		return
 	}
-	if err := models.Chats.SetLocale(ctx, chat.ID, payload); err != nil {
+	if err := app.Store().Chats.SetLocale(ctx, chat.ID, payload); err != nil {
 		logger.Instance().Error("set locale", zap.Error(err))
 		return
 	}

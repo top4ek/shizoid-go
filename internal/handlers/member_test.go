@@ -32,7 +32,7 @@ func TestIsJoinTransition(t *testing.T) {
 			name: "member to restricted mute",
 			old:  tgmodels.ChatMember{Type: tgmodels.ChatMemberTypeMember, Member: &tgmodels.ChatMemberMember{User: &user}},
 			new: tgmodels.ChatMember{
-				Type: tgmodels.ChatMemberTypeRestricted,
+				Type:       tgmodels.ChatMemberTypeRestricted,
 				Restricted: &tgmodels.ChatMemberRestricted{User: &user, IsMember: true},
 			},
 			want: false,
@@ -40,7 +40,7 @@ func TestIsJoinTransition(t *testing.T) {
 		{
 			name: "restricted to member unmute",
 			old: tgmodels.ChatMember{
-				Type: tgmodels.ChatMemberTypeRestricted,
+				Type:       tgmodels.ChatMemberTypeRestricted,
 				Restricted: &tgmodels.ChatMemberRestricted{User: &user, IsMember: true},
 			},
 			new:  tgmodels.ChatMember{Type: tgmodels.ChatMemberTypeMember, Member: &tgmodels.ChatMemberMember{User: &user}},
@@ -50,7 +50,7 @@ func TestIsJoinTransition(t *testing.T) {
 			name: "left to administrator",
 			old:  tgmodels.ChatMember{Type: tgmodels.ChatMemberTypeLeft, Left: &tgmodels.ChatMemberLeft{User: &user}},
 			new: tgmodels.ChatMember{
-				Type: tgmodels.ChatMemberTypeAdministrator,
+				Type:          tgmodels.ChatMemberTypeAdministrator,
 				Administrator: &tgmodels.ChatMemberAdministrator{User: user},
 			},
 			want: false,

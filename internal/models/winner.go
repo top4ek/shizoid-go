@@ -2,7 +2,8 @@ package models
 
 import (
 	"context"
-	"database/sql"
+
+	"github.com/jackc/pgx/v5"
 	"time"
 )
 
@@ -15,37 +16,30 @@ type Winner struct {
 	CreatedAt time.Time `db:"created_at"`
 }
 
-type winners struct{}
-
-// Winners provides persistence operations for winners.
-var Winners winners
+type winners struct{ db DBTX }
 
 const maxWinnersPerChat = 365
 
-func (winners) HasToday(ctx context.Context, chatID int64) (bool, error) {
+func (r winners) HasToday(ctx context.Context, chatID int64) (bool, error) {
 	var exists bool
-	err := db.QueryRowContext(ctx,
+	err := r.db.QueryRow(ctx,
 		`SELECT EXISTS(SELECT 1 FROM winners WHERE chat_id = $1 AND date = CURRENT_DATE)`,
 		chatID).Scan(&exists)
 	return exists, err
 }
 
-func (winners) Create(ctx context.Context, chatID, userID int64) (bool, error) {
-	res, err := db.ExecContext(ctx,
+func (r winners) Create(ctx context.Context, chatID, userID int64) (bool, error) {
+	res, err := r.db.Exec(ctx,
 		`INSERT INTO winners (chat_id, user_id, date) VALUES ($1, $2, CURRENT_DATE)
 		 ON CONFLICT (chat_id, date) DO NOTHING`,
 		chatID, userID)
 	if err != nil {
 		return false, err
 	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return false, err
-	}
-	if n == 0 {
+	if res.RowsAffected() == 0 {
 		return false, nil
 	}
-	_, err = db.ExecContext(ctx,
+	_, err = r.db.Exec(ctx,
 		`DELETE FROM winners WHERE chat_id = $1 AND id NOT IN (
 			SELECT id FROM winners WHERE chat_id = $1 ORDER BY date DESC LIMIT $2
 		)`,
@@ -53,7 +47,7 @@ func (winners) Create(ctx context.Context, chatID, userID int64) (bool, error) {
 	return true, err
 }
 
-func (winners) LastWinner(ctx context.Context, chatID int64) (int64, string, string, bool, error) {
+func (r winners) LastWinner(ctx context.Context, chatID int64) (int64, string, string, bool, error) {
 	const q = `
 		SELECT w.user_id, COALESCE(u.username, ''),
 			COALESCE(NULLIF(u.username, ''), NULLIF(u.first_name, ''), NULLIF(u.last_name, ''), '')
@@ -64,8 +58,8 @@ func (winners) LastWinner(ctx context.Context, chatID int64) (int64, string, str
 		LIMIT 1`
 	var id int64
 	var username, name string
-	err := db.QueryRowContext(ctx, q, chatID).Scan(&id, &username, &name)
-	if err == sql.ErrNoRows {
+	err := r.db.QueryRow(ctx, q, chatID).Scan(&id, &username, &name)
+	if err == pgx.ErrNoRows {
 		return 0, "", "", false, nil
 	}
 	if err != nil {
@@ -74,7 +68,7 @@ func (winners) LastWinner(ctx context.Context, chatID int64) (int64, string, str
 	return id, username, name, true, nil
 }
 
-func (winners) TopOfYear(ctx context.Context, chatID int64, limit int) ([]ScoreEntry, error) {
+func (r winners) TopOfYear(ctx context.Context, chatID int64, limit int) ([]ScoreEntry, error) {
 	const q = `
 		SELECT w.user_id, COALESCE(NULLIF(u.username, ''), NULLIF(u.first_name, ''), NULLIF(u.last_name, ''), '') AS name, COUNT(*) AS wins
 		FROM winners w
@@ -83,7 +77,7 @@ func (winners) TopOfYear(ctx context.Context, chatID int64, limit int) ([]ScoreE
 		GROUP BY w.user_id, name
 		ORDER BY wins DESC
 		LIMIT $2`
-	rows, err := db.QueryContext(ctx, q, chatID, limit)
+	rows, err := r.db.Query(ctx, q, chatID, limit)
 	if err != nil {
 		return nil, err
 	}

@@ -1,43 +1,80 @@
 package models
 
 import (
-	"database/sql"
+	"context"
 	"fmt"
 	"time"
 
-	_ "github.com/lib/pq"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-var db *sql.DB
-
-// Init wires the package-level database handle used by all accessors.
-func Init(database *sql.DB) {
-	db = database
+// DBTX is the subset of *pgxpool.Pool and pgx.Tx used by repositories, so the
+// same repository code runs both on the pool and inside a transaction.
+type DBTX interface {
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 }
 
-// DB returns the initialized database handle (nil before Init).
-func DB() *sql.DB {
-	return db
+// Store aggregates the entity repositories over one connection pool.
+type Store struct {
+	pool *pgxpool.Pool
+
+	Chats          chats
+	Users          users
+	Pairs          pairs
+	Words          words
+	Messages       messages
+	Participations participations
+	Winners        winners
+	Greetings      greetings
+	Ingest         ingest
 }
 
-// OpenDB opens and pings a PostgreSQL connection.
-func OpenDB(host, port, user, password, name string) (*sql.DB, error) {
-	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+// NewStore wires all repositories to the given pool.
+func NewStore(pool *pgxpool.Pool) *Store {
+	return &Store{
+		pool:           pool,
+		Chats:          chats{db: pool},
+		Users:          users{db: pool},
+		Pairs:          pairs{db: pool},
+		Words:          words{db: pool},
+		Messages:       messages{db: pool},
+		Participations: participations{db: pool},
+		Winners:        winners{db: pool},
+		Greetings:      greetings{db: pool},
+		Ingest:         ingest{pool: pool},
+	}
+}
+
+// Pool exposes the underlying pool (e.g. for health checks).
+func (s *Store) Pool() *pgxpool.Pool { return s.pool }
+
+// DSN builds a PostgreSQL connection string. TLS is terminated at the load
+// balancer, hence sslmode=disable.
+func DSN(host, port, user, password, name string) string {
+	return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 		host, port, user, password, name)
+}
 
-	database, err := sql.Open("postgres", connStr)
+// OpenPool opens and pings a pgx connection pool.
+func OpenPool(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
+	cfg, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
 		return nil, err
 	}
+	cfg.MaxConns = 25
+	cfg.MaxConnLifetime = 30 * time.Minute
 
-	database.SetMaxOpenConns(25)
-	database.SetMaxIdleConns(10)
-	database.SetConnMaxLifetime(30 * time.Minute)
-
-	if err = database.Ping(); err != nil {
-		_ = database.Close()
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {
 		return nil, err
 	}
-
-	return database, nil
+	if err := pool.Ping(ctx); err != nil {
+		pool.Close()
+		return nil, err
+	}
+	return pool, nil
 }

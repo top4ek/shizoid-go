@@ -48,7 +48,7 @@ func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 			telegram.Reply(ctx, b, update, locale.T(lang, "common.not_admin"))
 			return
 		}
-		if err := models.Chats.SetGenerationMode(ctx, chat.ID, mode); err != nil {
+		if err := app.Store().Chats.SetGenerationMode(ctx, chat.ID, mode); err != nil {
 			logger.Instance().Error("set generation mode", zap.Error(err))
 			return
 		}

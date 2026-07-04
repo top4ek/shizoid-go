@@ -13,7 +13,7 @@ import (
 func TestPing(t *testing.T) {
 	logger.Init(true, "error")
 
-	req := httptest.NewRequest(http.MethodGet, "/ping", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/ping", nil)
 	rec := httptest.NewRecorder()
 
 	Ping(rec, req)
@@ -29,14 +29,14 @@ func TestHTTPWithPingRoutesPingBeforeFallback(t *testing.T) {
 	})
 	h := HTTPWithPing(fallback)
 
-	req := httptest.NewRequest(http.MethodGet, "/ping", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/ping", nil)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, `"OK"`, rec.Body.String())
 
-	req = httptest.NewRequest(http.MethodPost, "/webhook", nil)
+	req = httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/webhook", nil)
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 

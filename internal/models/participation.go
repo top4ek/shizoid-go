@@ -3,6 +3,8 @@ package models
 import (
 	"context"
 	"database/sql"
+
+	"github.com/jackc/pgx/v5"
 	"time"
 )
 
@@ -23,10 +25,7 @@ type Participation struct {
 	UpdatedAt           time.Time      `db:"updated_at"`
 }
 
-type participations struct{}
-
-// Participations provides persistence operations for participations.
-var Participations participations
+type participations struct{ db DBTX }
 
 // ScoreEntry is a single line of a chat leaderboard.
 type ScoreEntry struct {
@@ -66,7 +65,7 @@ func scanParticipation(row interface{ Scan(...any) error }) (*Participation, err
 	return p, nil
 }
 
-func ensureParticipationTx(ctx context.Context, tx *sql.Tx, chatID, userID int64, left bool) (*Participation, error) {
+func (r participations) Ensure(ctx context.Context, chatID, userID int64, left bool) (*Participation, error) {
 	const q = `
 		INSERT INTO participations (chat_id, user_id, left_at, active_at, updated_at)
 		VALUES ($1, $2, CASE WHEN $3 THEN NOW() ELSE NULL END, NOW(), NOW())
@@ -75,55 +74,43 @@ func ensureParticipationTx(ctx context.Context, tx *sql.Tx, chatID, userID int64
 			active_at = CASE WHEN $3 THEN participations.active_at ELSE NOW() END,
 			updated_at = NOW()
 		RETURNING ` + participationColumns
-	return scanParticipation(tx.QueryRowContext(ctx, q, chatID, userID, left))
+	return scanParticipation(r.db.QueryRow(ctx, q, chatID, userID, left))
 }
 
-func (participations) Ensure(ctx context.Context, chatID, userID int64, left bool) (*Participation, error) {
-	const q = `
-		INSERT INTO participations (chat_id, user_id, left_at, active_at, updated_at)
-		VALUES ($1, $2, CASE WHEN $3 THEN NOW() ELSE NULL END, NOW(), NOW())
-		ON CONFLICT (chat_id, user_id) DO UPDATE SET
-			left_at = CASE WHEN $3 THEN NOW() ELSE NULL END,
-			active_at = CASE WHEN $3 THEN participations.active_at ELSE NOW() END,
-			updated_at = NOW()
-		RETURNING ` + participationColumns
-	return scanParticipation(db.QueryRowContext(ctx, q, chatID, userID, left))
-}
-
-func (participations) IncrScore(ctx context.Context, chatID, userID int64, delta int) error {
-	_, err := db.ExecContext(ctx,
+func (r participations) IncrScore(ctx context.Context, chatID, userID int64, delta int) error {
+	_, err := r.db.Exec(ctx,
 		`UPDATE participations SET score = score + $3, updated_at = NOW() WHERE chat_id = $1 AND user_id = $2`,
 		chatID, userID, delta)
 	return err
 }
 
-func (participations) ResetScores(ctx context.Context, chatID int64) error {
-	_, err := db.ExecContext(ctx, `UPDATE participations SET score = 0 WHERE chat_id = $1`, chatID)
+func (r participations) ResetScores(ctx context.Context, chatID int64) error {
+	_, err := r.db.Exec(ctx, `UPDATE participations SET score = 0 WHERE chat_id = $1`, chatID)
 	return err
 }
 
-func (participations) CaptchaSolved(ctx context.Context, chatID, userID int64) (bool, error) {
+func (r participations) CaptchaSolved(ctx context.Context, chatID, userID int64) (bool, error) {
 	var solved bool
-	err := db.QueryRowContext(ctx,
+	err := r.db.QueryRow(ctx,
 		`SELECT captcha_solved_at IS NOT NULL FROM participations WHERE chat_id = $1 AND user_id = $2`,
 		chatID, userID).Scan(&solved)
-	if err == sql.ErrNoRows {
+	if err == pgx.ErrNoRows {
 		return false, nil
 	}
 	return solved, err
 }
 
-func (participations) GetCaptchaPending(ctx context.Context, chatID, userID int64) (correctEmoji string, messageID int, ok bool, err error) {
+func (r participations) GetCaptchaPending(ctx context.Context, chatID, userID int64) (correctEmoji string, messageID int, ok bool, err error) {
 	var emoji sql.NullString
 	var msgID sql.NullInt64
-	err = db.QueryRowContext(ctx, `
+	err = r.db.QueryRow(ctx, `
 		SELECT captcha_correct_emoji, captcha_message_id
 		FROM participations
 		WHERE chat_id = $1 AND user_id = $2
 		  AND captcha_requested_at IS NOT NULL
 		  AND captcha_solved_at IS NULL`,
 		chatID, userID).Scan(&emoji, &msgID)
-	if err == sql.ErrNoRows {
+	if err == pgx.ErrNoRows {
 		return "", 0, false, nil
 	}
 	if err != nil {
@@ -139,42 +126,38 @@ func (participations) GetCaptchaPending(ctx context.Context, chatID, userID int6
 	return emoji.String, id, true, nil
 }
 
-func (participations) GreetingGreeted(ctx context.Context, chatID, userID int64) (bool, error) {
+func (r participations) GreetingGreeted(ctx context.Context, chatID, userID int64) (bool, error) {
 	var greeted bool
-	err := db.QueryRowContext(ctx,
+	err := r.db.QueryRow(ctx,
 		`SELECT greeted_at IS NOT NULL FROM participations WHERE chat_id = $1 AND user_id = $2`,
 		chatID, userID).Scan(&greeted)
-	if err == sql.ErrNoRows {
+	if err == pgx.ErrNoRows {
 		return false, nil
 	}
 	return greeted, err
 }
 
-func (participations) TryClaimGreeting(ctx context.Context, chatID, userID int64) (bool, error) {
-	res, err := db.ExecContext(ctx, `
+func (r participations) TryClaimGreeting(ctx context.Context, chatID, userID int64) (bool, error) {
+	res, err := r.db.Exec(ctx, `
 		UPDATE participations SET greeted_at = NOW(), updated_at = NOW()
 		WHERE chat_id = $1 AND user_id = $2 AND greeted_at IS NULL`,
 		chatID, userID)
 	if err != nil {
 		return false, err
 	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return false, err
-	}
-	return n == 1, nil
+	return res.RowsAffected() == 1, nil
 }
 
-func (participations) ClearGreeting(ctx context.Context, chatID, userID int64) error {
-	_, err := db.ExecContext(ctx, `
+func (r participations) ClearGreeting(ctx context.Context, chatID, userID int64) error {
+	_, err := r.db.Exec(ctx, `
 		UPDATE participations SET greeted_at = NULL, updated_at = NOW()
 		WHERE chat_id = $1 AND user_id = $2`,
 		chatID, userID)
 	return err
 }
 
-func (participations) TryClaimCaptcha(ctx context.Context, chatID, userID int64) (bool, error) {
-	res, err := db.ExecContext(ctx, `
+func (r participations) TryClaimCaptcha(ctx context.Context, chatID, userID int64) (bool, error) {
+	res, err := r.db.Exec(ctx, `
 		UPDATE participations SET captcha_requested_at = NOW(), updated_at = NOW()
 		WHERE chat_id = $1 AND user_id = $2
 		  AND captcha_solved_at IS NULL
@@ -183,15 +166,11 @@ func (participations) TryClaimCaptcha(ctx context.Context, chatID, userID int64)
 	if err != nil {
 		return false, err
 	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return false, err
-	}
-	return n == 1, nil
+	return res.RowsAffected() == 1, nil
 }
 
-func (participations) SetCaptchaDetails(ctx context.Context, chatID, userID int64, emoji string, messageID int) error {
-	_, err := db.ExecContext(ctx, `
+func (r participations) SetCaptchaDetails(ctx context.Context, chatID, userID int64, emoji string, messageID int) error {
+	_, err := r.db.Exec(ctx, `
 		UPDATE participations SET
 			captcha_correct_emoji = $3,
 			captcha_message_id = $4,
@@ -203,8 +182,8 @@ func (participations) SetCaptchaDetails(ctx context.Context, chatID, userID int6
 	return err
 }
 
-func (participations) StartCaptcha(ctx context.Context, chatID, userID int64, emoji string, messageID int) error {
-	_, err := db.ExecContext(ctx, `
+func (r participations) StartCaptcha(ctx context.Context, chatID, userID int64, emoji string, messageID int) error {
+	_, err := r.db.Exec(ctx, `
 		UPDATE participations SET
 			captcha_requested_at = NOW(),
 			captcha_correct_emoji = $3,
@@ -215,8 +194,8 @@ func (participations) StartCaptcha(ctx context.Context, chatID, userID int64, em
 	return err
 }
 
-func (participations) ClearCaptcha(ctx context.Context, chatID, userID int64) error {
-	_, err := db.ExecContext(ctx, `
+func (r participations) ClearCaptcha(ctx context.Context, chatID, userID int64) error {
+	_, err := r.db.Exec(ctx, `
 		UPDATE participations SET
 			captcha_requested_at = NULL,
 			captcha_correct_emoji = NULL,
@@ -227,8 +206,8 @@ func (participations) ClearCaptcha(ctx context.Context, chatID, userID int64) er
 	return err
 }
 
-func (participations) MarkCaptchaSolved(ctx context.Context, chatID, userID int64) error {
-	_, err := db.ExecContext(ctx, `
+func (r participations) MarkCaptchaSolved(ctx context.Context, chatID, userID int64) error {
+	_, err := r.db.Exec(ctx, `
 		UPDATE participations SET
 			captcha_solved_at = NOW(),
 			captcha_requested_at = NULL,
@@ -240,7 +219,7 @@ func (participations) MarkCaptchaSolved(ctx context.Context, chatID, userID int6
 	return err
 }
 
-func (participations) ExpiredPending(ctx context.Context, timeout time.Duration) ([]CaptchaPending, error) {
+func (r participations) ExpiredPending(ctx context.Context, timeout time.Duration) ([]CaptchaPending, error) {
 	deadline := time.Now().Add(-timeout)
 	const q = `
 		SELECT p.chat_id, p.user_id, p.captcha_message_id
@@ -252,7 +231,7 @@ func (participations) ExpiredPending(ctx context.Context, timeout time.Duration)
 		  AND c.captcha_enabled_at IS NOT NULL
 		  AND p.captcha_message_id IS NOT NULL
 		  AND p.captcha_requested_at < $1`
-	rows, err := db.QueryContext(ctx, q, deadline)
+	rows, err := r.db.Query(ctx, q, deadline)
 	if err != nil {
 		return nil, err
 	}
@@ -278,7 +257,7 @@ func scanMemberInfo(row interface{ Scan(...any) error }) (MemberInfo, error) {
 	return m, err
 }
 
-func (participations) InactiveSince(ctx context.Context, chatID int64, days int) ([]MemberInfo, error) {
+func (r participations) InactiveSince(ctx context.Context, chatID int64, days int) ([]MemberInfo, error) {
 	const q = `
 		SELECT p.user_id,
 			COALESCE(u.username, ''),
@@ -290,10 +269,10 @@ func (participations) InactiveSince(ctx context.Context, chatID int64, days int)
 		  AND COALESCE(u.is_bot, false) = false
 		  AND (p.active_at IS NULL OR p.active_at < NOW() - ($2 || ' days')::interval)
 		ORDER BY p.user_id`
-	return queryMembers(ctx, q, chatID, days)
+	return r.queryMembers(ctx, q, chatID, days)
 }
 
-func (participations) ActiveSince(ctx context.Context, chatID int64, days int) ([]MemberInfo, error) {
+func (r participations) ActiveSince(ctx context.Context, chatID int64, days int) ([]MemberInfo, error) {
 	const q = `
 		SELECT p.user_id,
 			COALESCE(u.username, ''),
@@ -305,11 +284,11 @@ func (participations) ActiveSince(ctx context.Context, chatID int64, days int) (
 		  AND COALESCE(u.is_bot, false) = false
 		  AND p.active_at >= NOW() - ($2 || ' days')::interval
 		ORDER BY p.user_id`
-	return queryMembers(ctx, q, chatID, days)
+	return r.queryMembers(ctx, q, chatID, days)
 }
 
-func queryMembers(ctx context.Context, q string, chatID int64, days int) ([]MemberInfo, error) {
-	rows, err := db.QueryContext(ctx, q, chatID, days)
+func (r participations) queryMembers(ctx context.Context, q string, chatID int64, days int) ([]MemberInfo, error) {
+	rows, err := r.db.Query(ctx, q, chatID, days)
 	if err != nil {
 		return nil, err
 	}
@@ -325,7 +304,7 @@ func queryMembers(ctx context.Context, q string, chatID int64, days int) ([]Memb
 	return out, rows.Err()
 }
 
-func (participations) TopByScore(ctx context.Context, chatID int64, limit int) ([]ScoreEntry, error) {
+func (r participations) TopByScore(ctx context.Context, chatID int64, limit int) ([]ScoreEntry, error) {
 	const q = `
 		SELECT p.user_id, COALESCE(u.username, ''),
 			COALESCE(NULLIF(u.username, ''), NULLIF(u.first_name, ''), NULLIF(u.last_name, ''), '') AS name,
@@ -335,7 +314,7 @@ func (participations) TopByScore(ctx context.Context, chatID int64, limit int) (
 		WHERE p.chat_id = $1 AND p.score > 0
 		ORDER BY p.score DESC
 		LIMIT $2`
-	rows, err := db.QueryContext(ctx, q, chatID, limit)
+	rows, err := r.db.Query(ctx, q, chatID, limit)
 	if err != nil {
 		return nil, err
 	}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"flag"
 	"fmt"
 	"net/http"
@@ -10,11 +11,13 @@ import (
 	"time"
 
 	"github.com/go-telegram/bot"
+	_ "github.com/jackc/pgx/v5/stdlib" // database/sql driver for goose migrations
 	"go.uber.org/zap"
 
 	"shizoid/internal/app"
 	"shizoid/internal/config"
 	"shizoid/internal/handlers"
+	"shizoid/internal/locale"
 	"shizoid/internal/logger"
 	"shizoid/internal/migrations"
 	"shizoid/internal/models"
@@ -30,6 +33,17 @@ func main() {
 	}
 }
 
+// runMigrations applies goose migrations over a short-lived database/sql
+// connection (goose requires *sql.DB; the app itself runs on pgxpool).
+func runMigrations(dsn string) error {
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	return migrations.Run(db)
+}
+
 func run(args []string) error {
 	fs := flag.NewFlagSet("shizoid", flag.ContinueOnError)
 	configPath := fs.String("config", "config.yaml", "path to config file")
@@ -43,19 +57,18 @@ func run(args []string) error {
 	}
 	logger.Init(config.Development(), config.LogLevel())
 
-	db, err := models.OpenDB(
+	if err := locale.Load(); err != nil {
+		logger.Instance().Fatal("locales", zap.Error(err))
+	}
+
+	dsn := models.DSN(
 		config.Database.Host,
 		config.Database.Port,
 		config.Database.User,
 		config.Database.Password,
 		config.Database.Name,
 	)
-	if err != nil {
-		logger.Instance().Fatal("database connection", zap.Error(err))
-	}
-	defer db.Close()
-
-	if err := migrations.Run(db); err != nil {
+	if err := runMigrations(dsn); err != nil {
 		logger.Instance().Fatal("migrations", zap.Error(err))
 	}
 	if *migrateOnly {
@@ -63,10 +76,16 @@ func run(args []string) error {
 		return nil
 	}
 
+	pool, err := models.OpenPool(context.Background(), dsn)
+	if err != nil {
+		logger.Instance().Fatal("database connection", zap.Error(err))
+	}
+	defer pool.Close()
+
 	sentry.Init()
 	defer sentry.Flush()
 
-	app.Init(db)
+	app.Init(pool)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
@@ -107,7 +126,15 @@ func run(args []string) error {
 	handlers.RegisterHandlers(ctx, botInstance)
 
 	sched := scheduler.Start(botInstance)
-	defer sched.Stop()
+	defer func() {
+		stopCtx := sched.Stop()
+		select {
+		case <-stopCtx.Done():
+		case <-time.After(30 * time.Second):
+			logger.Instance().Warn("scheduler stop timed out, jobs still running")
+		}
+		handlers.WaitCollectStats(30 * time.Second)
+	}()
 
 	if config.Telegram.PollMode() {
 		botInstance.Start(ctx)

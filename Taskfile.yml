@@ -1,0 +1,72 @@
+version: "3"
+
+vars:
+  GOLANGCI_LINT_VERSION: v2.12.2
+
+tasks:
+  default:
+    desc: Build, vet and test
+    cmds:
+      - task: build
+      - task: vet
+      - task: test
+
+  build:
+    desc: Compile all packages
+    cmds:
+      - go build ./...
+
+  test:
+    desc: Run the full test suite (integration tests need docker)
+    cmds:
+      - go test -race ./...
+
+  test-short:
+    desc: Run unit tests only (skips dockerized integration tests)
+    cmds:
+      - go test -short ./...
+
+  vet:
+    desc: Run go vet
+    cmds:
+      - go vet ./...
+
+  fmt:
+    desc: Check gofmt formatting
+    cmds:
+      - test -z "$(gofmt -l cmd internal)"
+
+  lint:
+    desc: Run golangci-lint
+    cmds:
+      - golangci-lint run
+
+  lint-install:
+    desc: Install pinned golangci-lint
+    cmds:
+      - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b $(go env GOPATH)/bin {{.GOLANGCI_LINT_VERSION}}
+
+  dev:
+    desc: Run the dev stack in Docker (hot reload + Delve; postgres + llama)
+    cmds:
+      - test -f build/dev/.env || cp build/dev/.env-example build/dev/.env
+      - docker compose up --build
+
+  dev-down:
+    desc: Stop the dev stack
+    cmds:
+      - docker compose down
+
+  vuln:
+    desc: Scan dependencies for known vulnerabilities
+    cmds:
+      - go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+  ci:
+    desc: Everything CI runs
+    cmds:
+      - task: fmt
+      - task: vet
+      - task: lint
+      - task: test
+      - task: vuln

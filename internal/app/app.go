@@ -2,11 +2,11 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"slices"
 	"strings"
 	"sync/atomic"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
 
 	"shizoid/internal/config"
@@ -17,23 +17,27 @@ import (
 )
 
 var (
+	store       *models.Store
 	gen         *generator.Generator
 	neuralCli   *neural.Client
 	botID       atomic.Int64
 	botUsername atomic.Value
 )
 
-// Init wires the data layer, neural client and generator from a database handle.
-func Init(db *sql.DB) {
-	models.Init(db)
+// Init wires the data layer, neural client and generator from a connection pool.
+func Init(pool *pgxpool.Pool) {
+	store = models.NewStore(pool)
 	neuralCli = neural.New(config.Neural.Reply, config.Neural.Summary)
-	gen = generator.New(neuralCli)
+	gen = generator.New(store, neuralCli)
 	logger.Instance().Debug("app init",
 		zap.Int("neural_reply_providers", len(config.Neural.Reply)),
 		zap.Int("neural_summary_providers", len(config.Neural.Summary)),
 		zap.Bool("neural_configured", neuralCli.ReplyConfigured()),
 	)
 }
+
+// Store returns the shared data-layer store (nil before Init).
+func Store() *models.Store { return store }
 
 // Gen returns the shared text generator.
 func Gen() *generator.Generator { return gen }
@@ -42,7 +46,7 @@ func Gen() *generator.Generator { return gen }
 func Neural() *neural.Client { return neuralCli }
 
 // Ready reports whether the data layer is initialized.
-func Ready() bool { return models.DB() != nil }
+func Ready() bool { return store != nil }
 
 // SetBotID records the bot's own Telegram id.
 func SetBotID(id int64) {

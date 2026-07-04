@@ -9,7 +9,6 @@ import (
 
 	"shizoid/internal/app"
 	"shizoid/internal/logger"
-	"shizoid/internal/models"
 	"shizoid/internal/telegram"
 )
 
@@ -18,7 +17,7 @@ func OnMemberJoined(ctx context.Context, chatID int64, member tgmodels.User) (bo
 	if !app.Ready() {
 		return false, nil
 	}
-	greeted, err := models.Participations.GreetingGreeted(ctx, chatID, member.ID)
+	greeted, err := app.Store().Participations.GreetingGreeted(ctx, chatID, member.ID)
 	if err != nil {
 		return false, err
 	}
@@ -29,7 +28,7 @@ func OnMemberJoined(ctx context.Context, chatID int64, member tgmodels.User) (bo
 		)
 		return false, nil
 	}
-	claimed, err := models.Participations.TryClaimGreeting(ctx, chatID, member.ID)
+	claimed, err := app.Store().Participations.TryClaimGreeting(ctx, chatID, member.ID)
 	if err != nil {
 		return false, err
 	}
@@ -48,7 +47,7 @@ func Send(ctx context.Context, b *bot.Bot, chatID int64) (bool, error) {
 	if !app.Ready() {
 		return false, nil
 	}
-	text, ok, err := models.Greetings.Get(ctx, chatID)
+	text, ok, err := app.Store().Greetings.Get(ctx, chatID)
 	if err != nil {
 		return false, err
 	}

@@ -301,13 +301,21 @@ func (c *Client) complete(ctx context.Context, chain []Provider, messages []chat
 	return "", lastErr
 }
 
-func (c *Client) call(ctx context.Context, p Provider, messages []chatMessage) (string, error) {
-	if c.ledger != nil && !c.ledger.reserve(p.Name, p.DailyLimit) {
-		logger.Instance().Debug("neural daily limit exceeded",
-			zap.String("provider", p.Name),
-			zap.Int("limit", p.DailyLimit),
-		)
-		return "", fmt.Errorf("neural: %s: daily limit exceeded", p.Name)
+func (c *Client) call(ctx context.Context, p Provider, messages []chatMessage) (out string, err error) {
+	if c.ledger != nil {
+		if !c.ledger.reserve(p.Name, p.DailyLimit) {
+			logger.Instance().Debug("neural daily limit exceeded",
+				zap.String("provider", p.Name),
+				zap.Int("limit", p.DailyLimit),
+			)
+			return "", fmt.Errorf("neural: %s: daily limit exceeded", p.Name)
+		}
+		// Only successful non-empty completions consume the daily budget.
+		defer func() {
+			if err != nil || strings.TrimSpace(out) == "" {
+				c.ledger.release(p.Name, p.DailyLimit)
+			}
+		}()
 	}
 	if err := c.checkSlots(ctx, p); err != nil {
 		return "", err
@@ -344,12 +352,13 @@ func (c *Client) call(ctx context.Context, p Provider, messages []chatMessage) (
 	log.Info("neural request",
 		zap.String("provider", p.Name),
 		zap.String("model", p.Model),
-		zap.String("url", url),
 		zap.Int("messages_count", len(messages)),
 	)
+	// Payload carries user message text: debug-only and truncated.
 	log.Debug("neural request payload",
 		zap.String("provider", p.Name),
-		zap.String("body", string(body)),
+		zap.String("url", url),
+		zap.String("body", logger.TruncateLogText(string(body))),
 	)
 	start := time.Now()
 
@@ -385,14 +394,13 @@ func (c *Client) call(ctx context.Context, p Provider, messages []chatMessage) (
 	raw := messageText(parsed.Choices[0].Message.Content)
 	log.Debug("neural response payload",
 		zap.String("provider", p.Name),
-		zap.String("body", string(respBody)),
-		zap.String("text", raw),
+		zap.String("body", logger.TruncateLogText(string(respBody))),
+		zap.String("text", logger.TruncateLogText(raw)),
 	)
-	out := stripThinking(raw)
+	out = stripThinking(raw)
 	log.Info("neural response",
 		zap.String("provider", p.Name),
 		zap.String("model", p.Model),
-		zap.String("url", url),
 		zap.Int("status", resp.StatusCode),
 		zap.Duration("duration", time.Since(start)),
 		zap.Int("text_len", len(out)),

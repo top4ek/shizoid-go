@@ -59,9 +59,9 @@ func Kick(ctx context.Context, b *bot.Bot, chatID, userID int64) bool {
 		return false
 	}
 	if _, err := b.UnbanChatMember(ctx, &bot.UnbanChatMemberParams{
-		ChatID:         chatID,
-		UserID:         userID,
-		OnlyIfBanned:   true,
+		ChatID:       chatID,
+		UserID:       userID,
+		OnlyIfBanned: true,
 	}); err != nil {
 		logger.Instance().Error("kick chat member unban",
 			zap.Error(err),

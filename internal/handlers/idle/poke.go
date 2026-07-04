@@ -32,7 +32,7 @@ func PokeChat(ctx context.Context, b *bot.Bot, chat *models.Chat, now time.Time)
 	}
 
 	days := int(chat.IdleDays.Int64)
-	inactivePool, err := models.Participations.InactiveSince(ctx, chat.ID, days)
+	inactivePool, err := app.Store().Participations.InactiveSince(ctx, chat.ID, days)
 	if err != nil {
 		logger.Instance().Error("idle: inactive members", zap.Int64("chat_id", chat.ID), zap.Error(err))
 		return false
@@ -42,7 +42,7 @@ func PokeChat(ctx context.Context, b *bot.Bot, chat *models.Chat, now time.Time)
 	}
 	inactive := inactivePool[rand.IntN(len(inactivePool))]
 
-	activePool, err := models.Participations.ActiveSince(ctx, chat.ID, days)
+	activePool, err := app.Store().Participations.ActiveSince(ctx, chat.ID, days)
 	if err != nil {
 		logger.Instance().Error("idle: active members", zap.Int64("chat_id", chat.ID), zap.Error(err))
 		return false
@@ -64,7 +64,7 @@ func PokeChat(ctx context.Context, b *bot.Bot, chat *models.Chat, now time.Time)
 		logger.Instance().Error("idle: send", zap.Int64("chat_id", chat.ID), zap.Error(err))
 		return false
 	}
-	if err := models.Chats.SetIdlePokedAt(ctx, chat.ID, now); err != nil {
+	if err := app.Store().Chats.SetIdlePokedAt(ctx, chat.ID, now); err != nil {
 		logger.Instance().Error("idle: mark poked", zap.Int64("chat_id", chat.ID), zap.Error(err))
 	}
 	return true

@@ -41,6 +41,22 @@ func (l *usageLedger) reserve(name string, limit int) bool {
 	return true
 }
 
+// release returns a reserved unit after a failed or empty completion so only
+// successful answers consume the daily budget.
+func (l *usageLedger) release(name string, limit int) {
+	if limit <= 0 {
+		return
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	e := l.entries[name]
+	if e.day != l.today() || e.count <= 0 {
+		return
+	}
+	e.count--
+	l.entries[name] = e
+}
+
 func (l *usageLedger) setCount(name, day string, count int) {
 	l.mu.Lock()
 	defer l.mu.Unlock()

@@ -17,10 +17,10 @@ func TestNormalizedPayload(t *testing.T) {
 }
 
 func TestClassifyGenerationAction(t *testing.T) {
-	action, mode := classifyGenerationAction("")
+	action, _ := classifyGenerationAction("")
 	assert.Equal(t, generationShow, action)
 
-	action, mode = classifyGenerationAction("magic")
+	action, mode := classifyGenerationAction("magic")
 	assert.Equal(t, generationUnknown, action)
 	assert.Equal(t, models.GenerationMode(0), mode)
 

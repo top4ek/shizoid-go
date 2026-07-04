@@ -27,16 +27,9 @@ const (
 )
 
 func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
-	if update.Message == nil || update.Message.From == nil || !app.Enabled(ctx) || !app.Ready() {
-		return
-	}
 	lang := app.Locale(ctx)
 	chat := app.ChatFrom(ctx)
 	if chat == nil {
-		return
-	}
-	if !app.IsOwner(update.Message.From.ID) {
-		telegram.Reply(ctx, b, update, locale.T(lang, "common.not_owner"))
 		return
 	}
 
@@ -45,13 +38,13 @@ func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 	case payload == "":
 		telegram.Reply(ctx, b, update, currentPromptText(chat, lang))
 	case strings.EqualFold(payload, "disable"):
-		if err := models.Chats.SetSystemPrompt(ctx, chat.ID, sql.NullString{}); err != nil {
+		if err := app.Store().Chats.SetSystemPrompt(ctx, chat.ID, sql.NullString{}); err != nil {
 			logger.Instance().Error("prompt clear", zap.Error(err))
 			return
 		}
 		telegram.Reply(ctx, b, update, locale.T(lang, "prompt.cleared"))
 	default:
-		if err := models.Chats.SetSystemPrompt(ctx, chat.ID, sql.NullString{String: payload, Valid: true}); err != nil {
+		if err := app.Store().Chats.SetSystemPrompt(ctx, chat.ID, sql.NullString{String: payload, Valid: true}); err != nil {
 			logger.Instance().Error("prompt set", zap.Error(err))
 			return
 		}

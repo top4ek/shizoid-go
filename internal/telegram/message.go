@@ -11,7 +11,6 @@ import (
 
 	"shizoid/internal/app"
 	"shizoid/internal/logger"
-	"shizoid/internal/models"
 	"shizoid/internal/sentry"
 )
 
@@ -111,15 +110,27 @@ func SendToChat(ctx context.Context, b *bot.Bot, chatID int64, text string, opts
 }
 
 func prepareOutboundText(text string) string {
-	return truncateMessage(SanitizeV2(text))
-}
-
-func truncateMessage(text string) string {
-	if utf8.RuneCountInString(text) <= maxMessageRunes {
-		return text
+	out := SanitizeV2(text)
+	if utf8.RuneCountInString(out) <= maxMessageRunes {
+		return out
 	}
-	r := []rune(text)
-	return string(r[:maxMessageRunes])
+	raw := []rune(text)
+	limit := maxMessageRunes
+	if limit > len(raw) {
+		limit = len(raw)
+	}
+	for {
+		out = SanitizeV2(string(raw[:limit]))
+		n := utf8.RuneCountInString(out)
+		if n <= maxMessageRunes || limit == 0 {
+			return out
+		}
+		next := limit * maxMessageRunes / n
+		if next >= limit {
+			next = limit - 1
+		}
+		limit = next
+	}
 }
 
 func persistBotMessage(ctx context.Context, chatID int64, text string) {
@@ -132,7 +143,7 @@ func persistBotMessage(ctx context.Context, chatID int64, text string) {
 	}
 	bg, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := models.Messages.Append(bg, chatID, botID, text); err != nil {
+	if err := app.Store().Messages.Append(bg, chatID, botID, text); err != nil {
 		logger.Instance().Error("persist bot message", zap.Error(err))
 	}
 }

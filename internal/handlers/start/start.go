@@ -10,7 +10,6 @@ import (
 	"shizoid/internal/app"
 	"shizoid/internal/locale"
 	"shizoid/internal/logger"
-	"shizoid/internal/models"
 	"shizoid/internal/telegram"
 )
 
@@ -22,13 +21,7 @@ const (
 )
 
 func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
-	if update.Message == nil || update.Message.From == nil {
-		return
-	}
-	if !app.IsOwner(update.Message.From.ID) || !app.Ready() {
-		return
-	}
-	if err := models.Chats.Enable(ctx, update.Message.Chat.ID); err != nil {
+	if err := app.Store().Chats.Enable(ctx, update.Message.Chat.ID); err != nil {
 		logger.Instance().Error("start enable", zap.Error(err))
 		return
 	}

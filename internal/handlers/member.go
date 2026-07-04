@@ -11,7 +11,6 @@ import (
 	"shizoid/internal/handlers/captcha"
 	"shizoid/internal/handlers/greeting"
 	"shizoid/internal/logger"
-	"shizoid/internal/models"
 )
 
 // ChatMemberHandler handles chat_member updates (join transitions).
@@ -131,7 +130,7 @@ func handleMembersJoined(ctx context.Context, b *bot.Bot, chatID int64, users []
 				logger.Instance().Error("greeting send", zap.Int64("chat_id", chatID), zap.Error(err))
 			}
 			for _, uid := range greetedUsers {
-				if clearErr := models.Participations.ClearGreeting(ctx, chatID, uid); clearErr != nil {
+				if clearErr := app.Store().Participations.ClearGreeting(ctx, chatID, uid); clearErr != nil {
 					logger.Instance().Error("greeting clear", zap.Int64("user_id", uid), zap.Error(clearErr))
 				}
 			}
