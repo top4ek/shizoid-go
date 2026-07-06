@@ -51,7 +51,7 @@ func responseText(lang string, update *models.Update) string {
 		if action == "" {
 			action = "..."
 		}
-		return fmt.Sprintf("%s %s", userLink, bot.EscapeMarkdown(action))
+		return fmt.Sprintf("%s %s", userLink, telegram.FormatPlain(action))
 	}
-	return fmt.Sprintf("%s %s", userLink, bot.EscapeMarkdown(payload))
+	return fmt.Sprintf("%s %s", userLink, telegram.FormatPlain(payload))
 }

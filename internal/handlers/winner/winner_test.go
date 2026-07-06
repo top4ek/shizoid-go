@@ -9,6 +9,7 @@ import (
 
 	"shizoid/internal/locale"
 	"shizoid/internal/models"
+	"shizoid/internal/telegram"
 )
 
 func TestFormatTop(t *testing.T) {
@@ -42,7 +43,7 @@ func TestFormatWinnerUser_WithUsername(t *testing.T) {
 }
 
 func TestMarkdownPlain_EscapesLocaleString(t *testing.T) {
-	got := markdownPlain(locale.T("ru", "winner.no_one"))
+	got := telegram.FormatPlain(locale.T("ru", "winner.no_one"))
 	assert.Contains(t, got, `:\(`)
 	assert.NotContains(t, got, ":(")
 }

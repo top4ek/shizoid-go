@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"shizoid/internal/config"
+	"shizoid/internal/telegram"
 
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
@@ -136,7 +137,7 @@ func UserMarkdownLink(userID int64, username, label string) string {
 	if label == "" {
 		label = "Unknown"
 	}
-	escaped := bot.EscapeMarkdown(label)
+	escaped := telegram.FormatPlain(label)
 	if username != "" {
 		return fmt.Sprintf("[%s](https://t.me/%s)", escaped, username)
 	}

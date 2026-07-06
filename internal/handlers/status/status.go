@@ -57,13 +57,13 @@ func statusText(lang string, chat *models.Chat, pairs int) string {
 		winnerLabel = chat.Winner.String
 	}
 	return locale.T(lang, "status",
-		"active", bot.EscapeMarkdown(active),
-		"gab", bot.EscapeMarkdown(fmt.Sprint(chat.Random)),
-		"pairs", bot.EscapeMarkdown(fmt.Sprint(pairs)),
-		"captcha", bot.EscapeMarkdown(captcha),
-		"greeting", bot.EscapeMarkdown(greeting),
-		"winner", bot.EscapeMarkdown(winnerLabel),
-		"lang", bot.EscapeMarkdown(lang),
-		"version", bot.EscapeMarkdown(version.Version()),
+		"active", telegram.FormatPlain(active),
+		"gab", telegram.FormatPlain(fmt.Sprint(chat.Random)),
+		"pairs", telegram.FormatPlain(fmt.Sprint(pairs)),
+		"captcha", telegram.FormatPlain(captcha),
+		"greeting", telegram.FormatPlain(greeting),
+		"winner", telegram.FormatPlain(winnerLabel),
+		"lang", telegram.FormatPlain(lang),
+		"version", telegram.FormatPlain(version.Version()),
 	)
 }

@@ -13,7 +13,7 @@ func TestCurrentPromptText(t *testing.T) {
 	chat := &models.Chat{
 		SystemPrompt: sql.NullString{String: "  Be brief.  ", Valid: true},
 	}
-	assert.Contains(t, currentPromptText(chat, "en"), "Be brief.")
+	assert.Contains(t, currentPromptText(chat, "en"), `Be brief\.`)
 
 	chat.SystemPrompt = sql.NullString{}
 	assert.Equal(t, "Chat system prompt is not set.", currentPromptText(chat, "en"))
