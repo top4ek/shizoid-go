@@ -63,7 +63,7 @@ func enable(ctx context.Context, b *bot.Bot, update *tgmodels.Update, chatID int
 		logger.Instance().Error("winner enable", zap.Error(err))
 		return
 	}
-	telegram.Reply(ctx, b, update, locale.T(lang, "winner.enabled", "name", label))
+	telegram.Reply(ctx, b, update, locale.T(lang, "winner.enabled", "name", telegram.FormatPlain(label)))
 }
 
 func disable(ctx context.Context, b *bot.Bot, update *tgmodels.Update, chatID int64, lang string) {
@@ -78,18 +78,14 @@ func disable(ctx context.Context, b *bot.Bot, update *tgmodels.Update, chatID in
 	telegram.Reply(ctx, b, update, locale.T(lang, "winner.turned_off"))
 }
 
-func markdownPlain(s string) string {
-	return bot.EscapeMarkdown(s)
-}
-
 func currentStats(ctx context.Context, chatID int64, lang string) string {
 	entries, err := app.Store().Participations.TopByScore(ctx, chatID, 10)
 	if err != nil {
 		logger.Instance().Error("winner current", zap.Error(err))
-		return markdownPlain(locale.T(lang, "winner.no_one"))
+		return telegram.FormatPlain(locale.T(lang, "winner.no_one"))
 	}
 	if len(entries) == 0 {
-		return markdownPlain(locale.T(lang, "winner.no_one"))
+		return telegram.FormatPlain(locale.T(lang, "winner.no_one"))
 	}
 	return locale.T(lang, "winner.current", "top", FormatTop(lang, entries))
 }
@@ -100,7 +96,7 @@ func previousWinner(ctx context.Context, chatID int64, lang string) string {
 		logger.Instance().Error("winner last", zap.Error(err))
 	}
 	if !ok || name == "" {
-		return markdownPlain(locale.T(lang, "winner.no_one"))
+		return telegram.FormatPlain(locale.T(lang, "winner.no_one"))
 	}
 	entries, err := app.Store().Winners.TopOfYear(ctx, chatID, 10)
 	if err != nil {
@@ -112,7 +108,7 @@ func previousWinner(ctx context.Context, chatID int64, lang string) string {
 		label = chat.Winner.String
 	}
 	return locale.T(lang, "winner.winner",
-		"name", bot.EscapeMarkdown(label),
+		"name", telegram.FormatPlain(label),
 		"user", FormatWinnerUser(lang, userID, username, name),
 		"top", FormatTop(lang, entries))
 }
@@ -134,9 +130,9 @@ func FormatTop(lang string, entries []models.ScoreEntry) string {
 			name = locale.T(lang, "winner.default")
 		}
 		lines = append(lines, fmt.Sprintf("*%s\\.* %s — %s",
-			bot.EscapeMarkdown(fmt.Sprint(i+1)),
-			bot.EscapeMarkdown(name),
-			bot.EscapeMarkdown(fmt.Sprint(e.Score))))
+			telegram.FormatPlain(fmt.Sprint(i+1)),
+			telegram.FormatPlain(name),
+			telegram.FormatPlain(fmt.Sprint(e.Score))))
 	}
 	return strings.Join(lines, "\n")
 }

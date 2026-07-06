@@ -51,5 +51,5 @@ func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 }
 
 func levelText(lang string, chance int16) string {
-	return locale.T(lang, "gab.prefix") + " *" + bot.EscapeMarkdown(fmt.Sprint(chance)) + "%*\\."
+	return locale.T(lang, "gab.prefix") + " *" + telegram.FormatPlain(fmt.Sprint(chance)) + "%*\\."
 }

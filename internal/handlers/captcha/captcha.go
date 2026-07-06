@@ -117,7 +117,7 @@ func challengeMember(ctx context.Context, b *bot.Bot, chatID int64, lang string,
 
 	text := locale.T(lang, "captcha.message",
 		"user", formatUserLink(member),
-		"word", bot.EscapeMarkdown(correct.Word),
+		"word", telegram.FormatPlain(correct.Word),
 	)
 	row := make([]tgmodels.InlineKeyboardButton, len(buttons))
 	for i, sym := range buttons {

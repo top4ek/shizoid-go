@@ -27,15 +27,15 @@ func Handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 }
 
 func text(lang string, update *models.Update) string {
-	chatID := bot.EscapeMarkdown(fmt.Sprint(update.Message.Chat.ID))
-	chatType := bot.EscapeMarkdown(string(update.Message.Chat.Type))
-	userID := bot.EscapeMarkdown(fmt.Sprint(update.Message.From.ID))
+	chatID := telegram.FormatPlain(fmt.Sprint(update.Message.Chat.ID))
+	chatType := telegram.FormatPlain(string(update.Message.Chat.Type))
+	userID := telegram.FormatPlain(fmt.Sprint(update.Message.From.ID))
 	return fmt.Sprintf(
 		"*%s:* %s \\(%s\\)\n*%s:* %s",
-		bot.EscapeMarkdown(locale.T(lang, "ids.chat")),
+		telegram.FormatPlain(locale.T(lang, "ids.chat")),
 		chatID,
 		chatType,
-		bot.EscapeMarkdown(locale.T(lang, "ids.user")),
+		telegram.FormatPlain(locale.T(lang, "ids.user")),
 		userID,
 	)
 }

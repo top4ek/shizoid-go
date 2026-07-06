@@ -103,7 +103,7 @@ func announceWinner(ctx context.Context, b *bot.Bot, chatID int64, lang, label s
 		logger.Instance().Error("winners: top of year", zap.Error(err))
 	}
 	text := locale.T(lang, "winner.winner",
-		"name", bot.EscapeMarkdown(label),
+		"name", telegram.FormatPlain(label),
 		"user", winner.FormatWinnerUser(lang, userID, username, name),
 		"top", winner.FormatTop(lang, entries))
 	if _, err := telegram.SendToChat(ctx, b, chatID, text, telegram.ChatMessageOpts{

@@ -55,7 +55,7 @@ func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 func currentPromptText(chat *models.Chat, lang string) string {
 	if chat.SystemPrompt.Valid {
 		if p := strings.TrimSpace(chat.SystemPrompt.String); p != "" {
-			return locale.T(lang, "prompt.current", "prompt", p)
+			return locale.T(lang, "prompt.current", "prompt", telegram.FormatPlain(p))
 		}
 	}
 	return locale.T(lang, "prompt.none")
