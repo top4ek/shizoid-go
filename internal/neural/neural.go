@@ -453,12 +453,12 @@ func applySampling(p Provider, req *chatRequest) {
 		return
 	}
 	s := p.Sampling
-	req.Temperature = &s.Temperature
-	req.TopP = &s.TopP
-	req.TopK = &s.TopK
-	req.MinP = &s.MinP
-	req.PresencePenalty = &s.PresencePenalty
-	req.RepeatPenalty = &s.RepetitionPenalty
+	req.Temperature = s.Temperature
+	req.TopP = s.TopP
+	req.TopK = s.TopK
+	req.MinP = s.MinP
+	req.PresencePenalty = s.PresencePenalty
+	req.RepeatPenalty = s.RepetitionPenalty
 }
 
 // serverRoot strips the OpenAI /v1 prefix from a provider base URL.
