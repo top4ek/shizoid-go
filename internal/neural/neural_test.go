@@ -108,6 +108,10 @@ func TestReplyBuildsStructuredMessages(t *testing.T) {
 	assert.Nil(t, got.Temperature)
 }
 
+func fptr(v float64) *float64 { return &v }
+
+func iptr(v int) *int { return &v }
+
 func TestCallAppliesSamplingParams(t *testing.T) {
 	var got chatRequest
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -127,12 +131,12 @@ func TestCallAppliesSamplingParams(t *testing.T) {
 			Model:          "m",
 			TimeoutSeconds: 5,
 			Sampling: &SamplingParams{
-				Temperature:       0.7,
-				TopP:              0.8,
-				TopK:              20,
-				MinP:              0.0,
-				PresencePenalty:   1.5,
-				RepetitionPenalty: 1.0,
+				Temperature:       fptr(0.7),
+				TopP:              fptr(0.8),
+				TopK:              iptr(20),
+				MinP:              fptr(0.0),
+				PresencePenalty:   fptr(1.5),
+				RepetitionPenalty: fptr(1.0),
 			},
 		}},
 	}
@@ -151,6 +155,39 @@ func TestCallAppliesSamplingParams(t *testing.T) {
 	assert.Equal(t, 1.5, *got.PresencePenalty)
 	require.NotNil(t, got.RepeatPenalty)
 	assert.Equal(t, 1.0, *got.RepeatPenalty)
+}
+
+func TestCallOmitsUnsetSamplingParams(t *testing.T) {
+	var raw []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		raw = body
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"ok"}}]}`))
+	}))
+	defer srv.Close()
+
+	c := &Client{
+		http: http.DefaultClient,
+		reply: []Provider{{
+			Name:           "local",
+			BaseURL:        srv.URL + "/v1",
+			Model:          "m",
+			TimeoutSeconds: 5,
+			Sampling:       &SamplingParams{Temperature: fptr(0.7)},
+		}},
+	}
+	_, err := c.Reply(context.Background(), "sys", "hello")
+	require.NoError(t, err)
+
+	body := string(raw)
+	assert.Contains(t, body, `"temperature":0.7`)
+	assert.NotContains(t, body, "repeat_penalty")
+	assert.NotContains(t, body, "presence_penalty")
+	assert.NotContains(t, body, "top_p")
+	assert.NotContains(t, body, "top_k")
+	assert.NotContains(t, body, "min_p")
 }
 
 func TestReplyWithHistoryIncludesName(t *testing.T) {

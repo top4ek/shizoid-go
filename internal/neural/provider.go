@@ -1,12 +1,15 @@
 package neural
 
+// SamplingParams uses pointer fields so keys absent from the YAML config stay
+// nil and are omitted from the request instead of being sent as zeroes (e.g.
+// repeat_penalty: 0 makes llama.cpp divide logits by zero).
 type SamplingParams struct {
-	Temperature       float64 `yaml:"temperature"`
-	TopP              float64 `yaml:"top_p"`
-	TopK              int     `yaml:"top_k"`
-	MinP              float64 `yaml:"min_p"`
-	PresencePenalty   float64 `yaml:"presence_penalty"`
-	RepetitionPenalty float64 `yaml:"repetition_penalty"`
+	Temperature       *float64 `yaml:"temperature"`
+	TopP              *float64 `yaml:"top_p"`
+	TopK              *int     `yaml:"top_k"`
+	MinP              *float64 `yaml:"min_p"`
+	PresencePenalty   *float64 `yaml:"presence_penalty"`
+	RepetitionPenalty *float64 `yaml:"repetition_penalty"`
 }
 
 // Provider describes one OpenAI-compatible endpoint in a fallback chain. The
