@@ -108,17 +108,13 @@ func isMentioned(msg *tgmodels.Message) bool {
 	return false
 }
 
+// hasAnchor reports whether the text contains an anchor word. The match is a
+// case-insensitive substring so punctuation and inflected forms still trigger.
 func hasAnchor(ctx context.Context, text string) bool {
-	anchors := locale.List(app.Locale(ctx), "text.anchors")
-	if len(anchors) == 0 {
-		return false
-	}
-	set := make(map[string]struct{}, len(anchors))
-	for _, a := range anchors {
-		set[strings.ToLower(a)] = struct{}{}
-	}
-	for _, w := range strings.Fields(strings.ToLower(text)) {
-		if _, ok := set[w]; ok {
+	lower := strings.ToLower(text)
+	for _, anchor := range locale.List(app.Locale(ctx), "text.anchors") {
+		a := strings.ToLower(anchor)
+		if a != "" && strings.Contains(lower, a) {
 			return true
 		}
 	}
