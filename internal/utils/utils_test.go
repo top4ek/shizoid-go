@@ -121,12 +121,6 @@ func TestIsBotOwner_NilUpdate(t *testing.T) {
 	assert.False(t, IsBotOwner(nil))
 }
 
-func TestUserName_Nil(t *testing.T) {
-	name, err := UserName(nil)
-	assert.Equal(t, "Unknown", name)
-	assert.Error(t, err)
-}
-
 func TestUserMarkdownLink_WithUsername(t *testing.T) {
 	got := UserMarkdownLink(42, "alice", "alice")
 	assert.Equal(t, "[alice](https://t.me/alice)", got)

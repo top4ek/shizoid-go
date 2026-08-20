@@ -19,8 +19,6 @@ import (
 const (
 	Command     = "status"
 	Description = "Some statistics for chat"
-	HandlerType = bot.HandlerTypeMessageText
-	MatchType   = bot.MatchTypeCommandStartOnly
 )
 
 func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {

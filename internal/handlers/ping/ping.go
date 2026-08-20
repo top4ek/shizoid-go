@@ -14,8 +14,6 @@ import (
 const (
 	Command     = "ping"
 	Description = "Says Pong"
-	HandlerType = bot.HandlerTypeMessageText
-	MatchType   = bot.MatchTypeCommandStartOnly
 )
 
 func Handler(ctx context.Context, b *bot.Bot, update *models.Update) {

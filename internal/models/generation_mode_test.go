@@ -30,14 +30,6 @@ func TestParseGenerationMode(t *testing.T) {
 	assert.False(t, ok)
 }
 
-func TestValidGenerationMode(t *testing.T) {
-	assert.True(t, ValidGenerationMode(GenerationModeClassic))
-	assert.True(t, ValidGenerationMode(GenerationModeSimplified))
-	assert.True(t, ValidGenerationMode(GenerationModeNeural))
-	assert.False(t, ValidGenerationMode(GenerationMode(3)))
-	assert.False(t, ValidGenerationMode(GenerationMode(99)))
-}
-
 func TestGenerationModes(t *testing.T) {
 	assert.Equal(t, []GenerationMode{
 		GenerationModeClassic,

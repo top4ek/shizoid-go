@@ -6,24 +6,7 @@ import (
 	"strings"
 )
 
-// Word represents the words table.
-type Word struct {
-	ID   int64  `db:"id"`
-	Word string `db:"word"`
-}
-
 type words struct{ db DBTX }
-
-func (r words) EnsureWords(ctx context.Context, list []string) error {
-	uniq := uniqueNonEmpty(list)
-	if len(uniq) == 0 {
-		return nil
-	}
-	_, err := r.db.Exec(ctx,
-		`INSERT INTO words (word) SELECT unnest($1::text[]) ON CONFLICT (word) DO NOTHING`,
-		uniq)
-	return err
-}
 
 // EnsureIDs upserts the words and returns their ids in one round-trip
 // (the no-op DO UPDATE makes RETURNING yield pre-existing rows too).

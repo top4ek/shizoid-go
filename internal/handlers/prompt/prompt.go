@@ -22,8 +22,6 @@ import (
 const (
 	Command     = "prompt"
 	Description = "Show, set, or clear the chat's extra system prompt"
-	HandlerType = bot.HandlerTypeMessageText
-	MatchType   = bot.MatchTypeCommand
 )
 
 func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {

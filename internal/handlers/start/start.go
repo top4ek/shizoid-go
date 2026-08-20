@@ -16,8 +16,6 @@ import (
 const (
 	Command     = "start"
 	Description = "Start the bot in current chat"
-	HandlerType = bot.HandlerTypeMessageText
-	MatchType   = bot.MatchTypeCommandStartOnly
 )
 
 func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {

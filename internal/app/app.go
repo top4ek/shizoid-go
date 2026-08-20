@@ -79,7 +79,6 @@ type ctxKey int
 
 const (
 	chatKey ctxKey = iota
-	participationKey
 	skipMessageHistoryKey
 )
 
@@ -92,17 +91,6 @@ func WithChat(ctx context.Context, c *models.Chat) context.Context {
 func ChatFrom(ctx context.Context) *models.Chat {
 	c, _ := ctx.Value(chatKey).(*models.Chat)
 	return c
-}
-
-// WithParticipation stores the resolved participation in the context.
-func WithParticipation(ctx context.Context, p *models.Participation) context.Context {
-	return context.WithValue(ctx, participationKey, p)
-}
-
-// ParticipationFrom retrieves the participation from the context (nil if absent).
-func ParticipationFrom(ctx context.Context) *models.Participation {
-	p, _ := ctx.Value(participationKey).(*models.Participation)
-	return p
 }
 
 // WithSkipMessageHistory marks the update as a bot command; replies must not be stored.

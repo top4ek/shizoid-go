@@ -20,8 +20,6 @@ import (
 const (
 	Command     = "gab"
 	Description = "Show or set flood level (0-50, chat admins)"
-	HandlerType = bot.HandlerTypeMessageText
-	MatchType   = bot.MatchTypeCommand
 )
 
 func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {

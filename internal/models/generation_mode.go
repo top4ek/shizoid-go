@@ -33,10 +33,6 @@ func ParseGenerationMode(s string) (GenerationMode, bool) {
 	return 0, false
 }
 
-func ValidGenerationMode(m GenerationMode) bool {
-	return m == GenerationModeClassic || m == GenerationModeSimplified || m == GenerationModeNeural
-}
-
 func GenerationModes() []GenerationMode {
 	return []GenerationMode{
 		GenerationModeClassic,

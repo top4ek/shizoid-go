@@ -14,6 +14,12 @@ import (
 	"shizoid/internal/logger"
 )
 
+// reply is the one-shot form the tests exercise: ReplyWithHistory with a single
+// user turn, which is what the production path (generator) builds by hand.
+func reply(c *Client, ctx context.Context, system, user string) (string, error) {
+	return c.ReplyWithHistory(ctx, system, []HistoryMessage{{Role: "user", Text: user}})
+}
+
 func init() {
 	logger.Init(true, "error")
 }
@@ -46,7 +52,7 @@ func TestReplyChainFallsBackToNextProvider(t *testing.T) {
 			{Name: "good", BaseURL: good.URL + "/v1", Model: "m", TimeoutSeconds: 5},
 		},
 	}
-	out, err := c.Reply(context.Background(), "sys", "hello")
+	out, err := reply(c, context.Background(), "sys", "hello")
 	require.NoError(t, err)
 	assert.Equal(t, "hi there", out)
 }
@@ -61,7 +67,7 @@ func TestReplyAllProvidersFail(t *testing.T) {
 		http:  http.DefaultClient,
 		reply: []Provider{{Name: "bad", BaseURL: bad.URL + "/v1", Model: "m", TimeoutSeconds: 5}},
 	}
-	_, err := c.Reply(context.Background(), "", "hello")
+	_, err := reply(c, context.Background(), "", "hello")
 	assert.Error(t, err)
 }
 
@@ -102,7 +108,7 @@ func TestReplyBuildsStructuredMessages(t *testing.T) {
 		http:  http.DefaultClient,
 		reply: []Provider{{Name: "local", BaseURL: srv.URL + "/v1", Model: "m", TimeoutSeconds: 5}},
 	}
-	_, err := c.Reply(context.Background(), "sys prompt", "hello")
+	_, err := reply(c, context.Background(), "sys prompt", "hello")
 	require.NoError(t, err)
 
 	require.Len(t, got.Messages, 2)
@@ -149,7 +155,7 @@ func TestCallAppliesSamplingParams(t *testing.T) {
 			},
 		}},
 	}
-	_, err := c.Reply(context.Background(), "sys", "hello")
+	_, err := reply(c, context.Background(), "sys", "hello")
 	require.NoError(t, err)
 
 	require.NotNil(t, got.Temperature)
@@ -187,7 +193,7 @@ func TestCallOmitsUnsetSamplingParams(t *testing.T) {
 			Sampling:       &SamplingParams{Temperature: fptr(0.7)},
 		}},
 	}
-	_, err := c.Reply(context.Background(), "sys", "hello")
+	_, err := reply(c, context.Background(), "sys", "hello")
 	require.NoError(t, err)
 
 	body := string(raw)
@@ -287,7 +293,7 @@ func TestReplyStripsThinkingTags(t *testing.T) {
 		http:  http.DefaultClient,
 		reply: []Provider{{Name: "local", BaseURL: srv.URL + "/v1", Model: "m", TimeoutSeconds: 5}},
 	}
-	out, err := c.Reply(context.Background(), "", "hello")
+	out, err := reply(c, context.Background(), "", "hello")
 	require.NoError(t, err)
 	assert.Equal(t, "Hi there!", out)
 }
@@ -322,7 +328,7 @@ func TestReplySkipsProviderWhenNoSlots(t *testing.T) {
 			{Name: "good", BaseURL: good.URL + "/v1", Model: "m", TimeoutSeconds: 5, SlotCheck: true},
 		},
 	}
-	out, err := c.Reply(context.Background(), "", "hello")
+	out, err := reply(c, context.Background(), "", "hello")
 	require.NoError(t, err)
 	assert.Equal(t, "classic avoided queue", out)
 }
@@ -344,7 +350,7 @@ func TestReplySkipsProviderWhenDailyLimitExceeded(t *testing.T) {
 	}, nil)
 	c.ledger.setCount("limited", c.ledger.today(), 1)
 
-	out, err := c.Reply(context.Background(), "", "hello")
+	out, err := reply(c, context.Background(), "", "hello")
 	require.NoError(t, err)
 	assert.Equal(t, "fallback provider", out)
 }
@@ -359,7 +365,7 @@ func TestDailyLimitSharedAcrossChains(t *testing.T) {
 	provider := Provider{Name: "shared", BaseURL: srv.URL + "/v1", Model: "m", TimeoutSeconds: 5, DailyLimit: 1}
 	c := New([]Provider{provider}, []Provider{provider})
 
-	_, err := c.Reply(context.Background(), "", "hello")
+	_, err := reply(c, context.Background(), "", "hello")
 	require.NoError(t, err)
 
 	_, err = c.Summarize(context.Background(), "prompt", "", []string{"msg"})
@@ -380,7 +386,7 @@ func TestDailyLimitOmittedIsUnlimited(t *testing.T) {
 	}, nil)
 
 	for range 3 {
-		_, err := c.Reply(context.Background(), "", "hello")
+		_, err := reply(c, context.Background(), "", "hello")
 		require.NoError(t, err)
 	}
 	assert.Equal(t, 3, calls)
@@ -460,7 +466,7 @@ func TestCallOrderLimitBeforeSlotCheck(t *testing.T) {
 	}, nil)
 	c.ledger.setCount("limited", c.ledger.today(), 1)
 
-	out, err := c.Reply(context.Background(), "", "hello")
+	out, err := reply(c, context.Background(), "", "hello")
 	require.NoError(t, err)
 	assert.Equal(t, "next", out)
 	assert.Zero(t, healthCalls, "slot check must not run when daily limit already exceeded")

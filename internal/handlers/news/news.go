@@ -20,8 +20,6 @@ import (
 const (
 	Command     = "news"
 	Description = "Daily joke news issue for this chat"
-	HandlerType = bot.HandlerTypeMessageText
-	MatchType   = bot.MatchTypeCommand
 )
 
 func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {

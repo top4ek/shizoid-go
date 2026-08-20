@@ -8,15 +8,6 @@ import (
 	"time"
 )
 
-// Message represents the messages table.
-type Message struct {
-	ID        int64     `db:"id"`
-	ChatID    int64     `db:"chat_id"`
-	UserID    int64     `db:"user_id"`
-	Text      string    `db:"text"`
-	CreatedAt time.Time `db:"created_at"`
-}
-
 type messages struct{ db DBTX }
 
 // MessageRow is a message joined with sender profile fields.
@@ -215,32 +206,6 @@ func (r messages) TextsSinceByBytes(ctx context.Context, chatID int64, since tim
 		texts = append(texts, t)
 	}
 	return texts, rows.Err()
-}
-
-func (r messages) TextsSince(ctx context.Context, chatID int64, since time.Time) ([]string, error) {
-	rows, err := r.db.Query(ctx,
-		`SELECT text FROM messages WHERE chat_id = $1 AND created_at >= $2 ORDER BY created_at ASC, id ASC`,
-		chatID, since)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var texts []string
-	for rows.Next() {
-		var t string
-		if err := rows.Scan(&t); err != nil {
-			return nil, err
-		}
-		texts = append(texts, t)
-	}
-	return texts, rows.Err()
-}
-
-func (r messages) LastActivity(ctx context.Context, chatID int64) (sql.NullTime, error) {
-	var last sql.NullTime
-	err := r.db.QueryRow(ctx,
-		`SELECT MAX(created_at) FROM messages WHERE chat_id = $1`, chatID).Scan(&last)
-	return last, err
 }
 
 func (r messages) recentLatestMessages(ctx context.Context, chatID int64) ([]MessageRow, error) {

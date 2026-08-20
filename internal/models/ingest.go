@@ -12,29 +12,28 @@ import (
 // ingest provides cross-entity transactional persistence; access via Store.Ingest.
 type ingest struct{ pool *pgxpool.Pool }
 
-func (r ingest) EnsureEntities(ctx context.Context, chat *Chat, user *User, left bool) (*Chat, *Participation, error) {
+func (r ingest) EnsureEntities(ctx context.Context, chat *Chat, user *User, left bool) (*Chat, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck // no-op after commit
 
 	persistedChat, err := (chats{db: tx}).Upsert(ctx, chat)
 	if err != nil {
-		return nil, nil, fmt.Errorf("ensure chat: %w", err)
+		return nil, fmt.Errorf("ensure chat: %w", err)
 	}
 	if _, err := (users{db: tx}).Upsert(ctx, user); err != nil {
-		return nil, nil, fmt.Errorf("ensure user: %w", err)
+		return nil, fmt.Errorf("ensure user: %w", err)
 	}
-	p, err := (participations{db: tx}).Ensure(ctx, chat.ID, user.ID, left)
-	if err != nil {
-		return nil, nil, fmt.Errorf("ensure participation: %w", err)
+	if err := (participations{db: tx}).Ensure(ctx, chat.ID, user.ID, left); err != nil {
+		return nil, fmt.Errorf("ensure participation: %w", err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return persistedChat, p, nil
+	return persistedChat, nil
 }
 
 func (r ingest) EnsureJoin(ctx context.Context, chat *Chat, members []tgmodels.User) (*Chat, error) {
@@ -57,7 +56,7 @@ func (r ingest) EnsureJoin(ctx context.Context, chat *Chat, members []tgmodels.U
 		if _, err := (users{db: tx}).Upsert(ctx, user); err != nil {
 			return nil, fmt.Errorf("ensure user: %w", err)
 		}
-		if _, err := (participations{db: tx}).Ensure(ctx, chat.ID, user.ID, false); err != nil {
+		if err := (participations{db: tx}).Ensure(ctx, chat.ID, user.ID, false); err != nil {
 			return nil, fmt.Errorf("ensure participation: %w", err)
 		}
 	}
@@ -78,7 +77,7 @@ func (r ingest) EnsureMember(ctx context.Context, chatID int64, user *User) erro
 	if _, err := (users{db: tx}).Upsert(ctx, user); err != nil {
 		return fmt.Errorf("ensure user: %w", err)
 	}
-	if _, err := (participations{db: tx}).Ensure(ctx, chatID, user.ID, false); err != nil {
+	if err := (participations{db: tx}).Ensure(ctx, chatID, user.ID, false); err != nil {
 		return fmt.Errorf("ensure participation: %w", err)
 	}
 	return tx.Commit(ctx)

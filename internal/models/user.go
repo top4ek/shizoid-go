@@ -5,32 +5,26 @@ import (
 	"database/sql"
 
 	"github.com/jackc/pgx/v5"
-	"time"
 )
 
 // User represents the users table (Telegram users, id = Telegram user id).
 type User struct {
-	ID              int64          `db:"id"`
-	IsBot           sql.NullBool   `db:"is_bot"`
-	FirstName       sql.NullString `db:"first_name"`
-	LastName        sql.NullString `db:"last_name"`
-	Username        sql.NullString `db:"username"`
-	LanguageCode    sql.NullString `db:"language_code"`
-	CreatedAt       time.Time      `db:"created_at"`
-	UpdatedAt       time.Time      `db:"updated_at"`
-	CaptchaSolvedAt sql.NullTime   `db:"captcha_solved_at"`
+	ID           int64          `db:"id"`
+	IsBot        sql.NullBool   `db:"is_bot"`
+	FirstName    sql.NullString `db:"first_name"`
+	LastName     sql.NullString `db:"last_name"`
+	Username     sql.NullString `db:"username"`
+	LanguageCode sql.NullString `db:"language_code"`
 }
 
 type users struct{ db DBTX }
 
-const userColumns = `id, is_bot, first_name, last_name, username, language_code,
-	captcha_solved_at, created_at, updated_at`
+const userColumns = `id, is_bot, first_name, last_name, username, language_code`
 
 func scanUser(row interface{ Scan(...any) error }) (*User, error) {
 	u := &User{}
 	err := row.Scan(
 		&u.ID, &u.IsBot, &u.FirstName, &u.LastName, &u.Username, &u.LanguageCode,
-		&u.CaptchaSolvedAt, &u.CreatedAt, &u.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -52,11 +46,6 @@ func (r users) Upsert(ctx context.Context, u *User) (*User, error) {
 		RETURNING ` + userColumns
 	return scanUser(r.db.QueryRow(ctx, q,
 		u.ID, u.IsBot, u.FirstName, u.LastName, u.Username, u.LanguageCode))
-}
-
-func (r users) Get(ctx context.Context, id int64) (*User, error) {
-	row := r.db.QueryRow(ctx, `SELECT `+userColumns+` FROM users WHERE id = $1`, id)
-	return scanUser(row)
 }
 
 func (r users) CaptchaSolved(ctx context.Context, id int64) (bool, error) {

@@ -79,17 +79,6 @@ func TestChatFrom(t *testing.T) {
 	assert.Equal(t, "en", got.Locale)
 }
 
-func TestParticipationFrom(t *testing.T) {
-	ctx := context.Background()
-	assert.Nil(t, ParticipationFrom(ctx))
-
-	p := &models.Participation{ID: 7, ChatID: 1, UserID: 2}
-	ctx = WithParticipation(ctx, p)
-	got := ParticipationFrom(ctx)
-	require.NotNil(t, got)
-	assert.Equal(t, int64(7), got.ID)
-}
-
 func TestSkipMessageHistory(t *testing.T) {
 	ctx := context.Background()
 	assert.False(t, SkipMessageHistory(ctx))

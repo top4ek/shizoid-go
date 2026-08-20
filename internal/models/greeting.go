@@ -6,13 +6,6 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Greeting represents the greetings table.
-type Greeting struct {
-	ID     int64  `db:"id"`
-	ChatID int64  `db:"chat_id"`
-	Text   string `db:"text"`
-}
-
 type greetings struct{ db DBTX }
 
 func (r greetings) Set(ctx context.Context, chatID int64, text string) error {

@@ -22,8 +22,6 @@ import (
 const (
 	Command     = "captcha"
 	Description = "Enable/disable join captcha"
-	HandlerType = bot.HandlerTypeMessageText
-	MatchType   = bot.MatchTypeCommand
 
 	CallbackPrefix = "captcha:"
 	CallbackType   = bot.HandlerTypeCallbackQueryData
