@@ -24,9 +24,6 @@ const (
 )
 
 func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
-	if update.Message == nil || update.Message.From == nil || !app.Enabled(ctx) || !app.Ready() {
-		return
-	}
 	chat := app.ChatFrom(ctx)
 	if chat == nil {
 		return

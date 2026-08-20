@@ -272,10 +272,9 @@ func defaultLocale() string {
 	return "ru"
 }
 
+// isBotCommand reports whether msg starts a bot command. msg must not be nil:
+// every call site guards the update first.
 func isBotCommand(msg *tgmodels.Message) bool {
-	if msg == nil {
-		return false
-	}
 	for _, part := range []struct {
 		text     string
 		entities []tgmodels.MessageEntity

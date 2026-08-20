@@ -54,9 +54,6 @@ func Start(b *bot.Bot) *cron.Cron {
 
 func runWinners(b *bot.Bot) {
 	logger.Instance().Debug("cron: winners")
-	if !app.Ready() {
-		return
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	chats, err := app.Store().Chats.Active(ctx)
@@ -123,9 +120,6 @@ func winnerLabel(label, lang string) string {
 
 func runMemory() {
 	logger.Instance().Debug("cron: memory")
-	if !app.Ready() || app.Neural() == nil {
-		return
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
@@ -174,7 +168,7 @@ const newsChatTimeout = 5 * time.Minute
 
 func runNews(b *bot.Bot) {
 	logger.Instance().Debug("cron: news")
-	if !app.Ready() || !app.Neural().SummaryConfigured() {
+	if !app.Neural().SummaryConfigured() {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
@@ -208,9 +202,6 @@ func runCaptcha(b *bot.Bot) {
 
 func runMessagePrune() {
 	logger.Instance().Debug("cron: message prune")
-	if !app.Ready() {
-		return
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	chatIDs, err := app.Store().Messages.ChatIDs(ctx)

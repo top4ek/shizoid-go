@@ -24,9 +24,6 @@ const (
 )
 
 func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
-	if update.Message == nil || update.Message.From == nil || !app.Enabled(ctx) {
-		return
-	}
 	lang := app.Locale(ctx)
 	chat := app.ChatFrom(ctx)
 	if chat == nil {

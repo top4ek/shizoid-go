@@ -45,7 +45,9 @@ func Gen() *generator.Generator { return gen }
 // Neural returns the shared neural client (may be nil if not initialized).
 func Neural() *neural.Client { return neuralCli }
 
-// Ready reports whether the data layer is initialized.
+// Ready reports whether the data layer is initialized. Init runs before the bot
+// can receive an update, so this is a startup-race belt for the ingest
+// middleware only; nothing downstream of it needs to re-check.
 func Ready() bool { return store != nil }
 
 // SetBotID records the bot's own Telegram id.

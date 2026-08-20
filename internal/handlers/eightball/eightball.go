@@ -21,9 +21,6 @@ const (
 )
 
 func Handler(ctx context.Context, b *bot.Bot, update *models.Update) {
-	if update.Message == nil || update.Message.From == nil {
-		return
-	}
 	payload := utils.ExtractCommandPayloadText(update)
 	text := response(app.Locale(ctx), payload, update.Message.From.ID)
 	if text != "" {

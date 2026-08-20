@@ -16,7 +16,7 @@ import (
 func Respond(ctx context.Context, b *bot.Bot, update *models.Update) bool {
 	msg := update.Message
 	chat := app.ChatFrom(ctx)
-	if msg == nil || chat == nil || msg.Text == "" {
+	if chat == nil || msg.Text == "" {
 		return false
 	}
 	if !triggers(ctx, msg.Text) {

@@ -62,40 +62,38 @@ func OnMemberJoined(ctx context.Context, b *bot.Bot, chatID int64, member tgmode
 }
 
 func challengeMember(ctx context.Context, b *bot.Bot, chatID int64, lang string, member tgmodels.User) error {
-	if app.Ready() {
-		global, err := app.Store().Users.CaptchaSolved(ctx, member.ID)
-		if err != nil {
-			return err
-		}
-		if global {
-			logger.Instance().Debug("captcha skip: global_solved",
-				zap.Int64("chat_id", chatID),
-				zap.Int64("user_id", member.ID),
-			)
-			return app.Store().Participations.MarkCaptchaSolved(ctx, chatID, member.ID)
-		}
-		solved, err := app.Store().Participations.CaptchaSolved(ctx, chatID, member.ID)
-		if err != nil {
-			return err
-		}
-		if solved {
-			logger.Instance().Debug("captcha skip: chat_solved",
-				zap.Int64("chat_id", chatID),
-				zap.Int64("user_id", member.ID),
-			)
-			return nil
-		}
-		claimed, err := app.Store().Participations.TryClaimCaptcha(ctx, chatID, member.ID)
-		if err != nil {
-			return err
-		}
-		if !claimed {
-			logger.Instance().Debug("captcha skip: duplicate",
-				zap.Int64("chat_id", chatID),
-				zap.Int64("user_id", member.ID),
-			)
-			return nil
-		}
+	global, err := app.Store().Users.CaptchaSolved(ctx, member.ID)
+	if err != nil {
+		return err
+	}
+	if global {
+		logger.Instance().Debug("captcha skip: global_solved",
+			zap.Int64("chat_id", chatID),
+			zap.Int64("user_id", member.ID),
+		)
+		return app.Store().Participations.MarkCaptchaSolved(ctx, chatID, member.ID)
+	}
+	solved, err := app.Store().Participations.CaptchaSolved(ctx, chatID, member.ID)
+	if err != nil {
+		return err
+	}
+	if solved {
+		logger.Instance().Debug("captcha skip: chat_solved",
+			zap.Int64("chat_id", chatID),
+			zap.Int64("user_id", member.ID),
+		)
+		return nil
+	}
+	claimed, err := app.Store().Participations.TryClaimCaptcha(ctx, chatID, member.ID)
+	if err != nil {
+		return err
+	}
+	if !claimed {
+		logger.Instance().Debug("captcha skip: duplicate",
+			zap.Int64("chat_id", chatID),
+			zap.Int64("user_id", member.ID),
+		)
+		return nil
 	}
 
 	logger.Instance().Debug("captcha challenge: start",
@@ -105,9 +103,7 @@ func challengeMember(ctx context.Context, b *bot.Bot, chatID int64, lang string,
 
 	correct, buttons, err := buildChallenge(lang)
 	if err != nil {
-		if app.Ready() {
-			_ = app.Store().Participations.ClearCaptcha(ctx, chatID, member.ID)
-		}
+		_ = app.Store().Participations.ClearCaptcha(ctx, chatID, member.ID)
 		return err
 	}
 
@@ -131,9 +127,7 @@ func challengeMember(ctx context.Context, b *bot.Bot, chatID int64, lang string,
 		DisableLinkPreview: true,
 	})
 	if err != nil {
-		if app.Ready() {
-			_ = app.Store().Participations.ClearCaptcha(ctx, chatID, member.ID)
-		}
+		_ = app.Store().Participations.ClearCaptcha(ctx, chatID, member.ID)
 		return err
 	}
 
@@ -143,15 +137,13 @@ func challengeMember(ctx context.Context, b *bot.Bot, chatID int64, lang string,
 		zap.Int("message_id", sent.ID),
 	)
 
-	if app.Ready() && sent != nil {
-		if err := app.Store().Participations.SetCaptchaDetails(ctx, chatID, member.ID, correct.Emoji, sent.ID); err != nil {
-			return err
-		}
-		logger.Instance().Debug("captcha challenge: persisted",
-			zap.Int64("chat_id", chatID),
-			zap.Int64("user_id", member.ID),
-		)
+	if err := app.Store().Participations.SetCaptchaDetails(ctx, chatID, member.ID, correct.Emoji, sent.ID); err != nil {
+		return err
 	}
+	logger.Instance().Debug("captcha challenge: persisted",
+		zap.Int64("chat_id", chatID),
+		zap.Int64("user_id", member.ID),
+	)
 	return nil
 }
 
@@ -176,15 +168,6 @@ func Callback(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 	}
 
 	lang := callbackLocale(ctx, chatID)
-
-	if !app.Ready() {
-		_, _ = b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
-			CallbackQueryID: cq.ID,
-			Text:            locale.T(lang, "common.error"),
-			ShowAlert:       true,
-		})
-		return
-	}
 
 	correctEmoji, messageID, pending, err := app.Store().Participations.GetCaptchaPending(ctx, chatID, targetID)
 	if err != nil {
@@ -248,9 +231,6 @@ func Callback(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 
 // ExpirePending kicks users with captcha challenges past the timeout.
 func ExpirePending(ctx context.Context, b *bot.Bot) {
-	if !app.Ready() {
-		return
-	}
 	pending, err := app.Store().Participations.ExpiredPending(ctx, time.Minute)
 	if err != nil {
 		logger.Instance().Error("captcha expired pending", zap.Error(err))
@@ -270,10 +250,8 @@ func failCaptcha(ctx context.Context, b *bot.Bot, chatID, userID int64, messageI
 	if messageID != 0 {
 		deleteCaptchaMessage(ctx, b, chatID, messageID)
 	}
-	if app.Ready() {
-		if err := app.Store().Participations.ClearCaptcha(ctx, chatID, userID); err != nil {
-			logger.Instance().Error("captcha clear", zap.Error(err))
-		}
+	if err := app.Store().Participations.ClearCaptcha(ctx, chatID, userID); err != nil {
+		logger.Instance().Error("captcha clear", zap.Error(err))
 	}
 	logger.Instance().Debug("captcha failed",
 		zap.Int64("chat_id", chatID),
@@ -287,9 +265,6 @@ func deleteCaptchaMessage(ctx context.Context, b *bot.Bot, chatID int64, message
 
 func callbackLocale(ctx context.Context, chatID int64) string {
 	if chat := app.ChatFrom(ctx); chat != nil {
-		return app.Locale(ctx)
-	}
-	if !app.Ready() {
 		return app.Locale(ctx)
 	}
 	chat, err := app.Store().Chats.Get(ctx, chatID)
