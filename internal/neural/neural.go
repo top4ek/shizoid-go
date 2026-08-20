@@ -52,6 +52,9 @@ func New(reply, summary []Provider) *Client {
 // ReplyConfigured reports whether at least one reply provider is configured.
 func (c *Client) ReplyConfigured() bool { return c != nil && len(c.reply) > 0 }
 
+// SummaryConfigured reports whether at least one summary provider is configured.
+func (c *Client) SummaryConfigured() bool { return c != nil && len(c.summary) > 0 }
+
 // HistoryMessage is one turn in a group-chat conversation sent to the model.
 // Name carries the Telegram user_id for human messages (OpenAI "name" field).
 type HistoryMessage struct {
@@ -276,6 +279,16 @@ func (c *Client) Summarize(ctx context.Context, prompt, existing string, msgs []
 		newMessage("user", b.String()),
 	}
 	return c.complete(ctx, c.summary, messages)
+}
+
+// News generates a chat news issue over the summary chain, which is sized for
+// the large context a full day of history needs. system carries the issue
+// instructions, user the chat log.
+func (c *Client) News(ctx context.Context, system, user string) (string, error) {
+	return c.complete(ctx, c.summary, []chatMessage{
+		newMessage("system", system),
+		newMessage("user", user),
+	})
 }
 
 func (c *Client) complete(ctx context.Context, chain []Provider, messages []chatMessage) (string, error) {

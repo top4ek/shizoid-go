@@ -306,3 +306,22 @@ func TestIntegrationWinnersLifecycle(t *testing.T) {
 	assert.Equal(t, userID, top[0].UserID)
 	assert.Equal(t, 1, top[0].Score)
 }
+
+func TestIntegrationChatNewsRoundTrip(t *testing.T) {
+	s := requireDB(t)
+	ctx := context.Background()
+	chat := seedChat(t, ctx)
+	assert.False(t, chat.NewsEnabled())
+
+	require.NoError(t, s.Chats.SetNews(ctx, chat.ID, sql.NullString{String: "спорт", Valid: true}))
+	stored, err := s.Chats.Get(ctx, chat.ID)
+	require.NoError(t, err)
+	assert.True(t, stored.NewsEnabled())
+	assert.Equal(t, "спорт", stored.News.String)
+
+	require.NoError(t, s.Chats.SetNews(ctx, chat.ID, sql.NullString{}))
+	stored, err = s.Chats.Get(ctx, chat.ID)
+	require.NoError(t, err)
+	assert.False(t, stored.News.Valid)
+	assert.False(t, stored.NewsEnabled())
+}

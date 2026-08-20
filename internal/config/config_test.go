@@ -73,7 +73,6 @@ app:
   bot_owners:
     - 808
   generation_mode: classic
-  idle_cron: "40 16 * * *"
   locale: ru
   memory_cron: "0 */3 * * *"
   winner_cron: "20 1 * * *"
@@ -120,7 +119,8 @@ telegram:
 	assert.Equal(t, "production", Sentry.Environment)
 	assert.NotEmpty(t, Environment.AppPrompt)
 	assert.NotEmpty(t, Environment.SummaryPrompt)
-	assert.NotEmpty(t, Environment.IdlePrompt)
+	assert.NotEmpty(t, Environment.NewsPrompt)
+	assert.Equal(t, "40 4 * * *", Environment.NewsCron)
 }
 
 func TestLoadRequiresToken(t *testing.T) {

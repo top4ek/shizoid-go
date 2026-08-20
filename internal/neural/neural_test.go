@@ -72,6 +72,15 @@ func TestReplyConfigured(t *testing.T) {
 	assert.True(t, (&Client{reply: []Provider{{}}}).ReplyConfigured())
 }
 
+func TestSummaryConfigured(t *testing.T) {
+	var nilClient *Client
+	assert.False(t, nilClient.SummaryConfigured())
+	assert.False(t, (&Client{}).SummaryConfigured())
+	// News runs over the summary chain, so a reply-only setup is still unconfigured.
+	assert.False(t, (&Client{reply: []Provider{{}}}).SummaryConfigured())
+	assert.True(t, (&Client{summary: []Provider{{}}}).SummaryConfigured())
+}
+
 func TestServerRoot(t *testing.T) {
 	assert.Equal(t, "http://llama:8080", serverRoot("http://llama:8080/v1"))
 	assert.Equal(t, "http://llama:8080", serverRoot("http://llama:8080/v1/"))

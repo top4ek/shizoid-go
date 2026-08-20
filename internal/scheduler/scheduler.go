@@ -1,5 +1,5 @@
-// Package scheduler runs periodic jobs: daily winner draw, idle pokes and
-// maintenance tasks such as message history pruning.
+// Package scheduler runs periodic jobs: daily winner draw and maintenance
+// tasks such as message history pruning.
 package scheduler
 
 import (
@@ -17,7 +17,7 @@ import (
 	"shizoid/internal/app"
 	"shizoid/internal/config"
 	"shizoid/internal/handlers/captcha"
-	"shizoid/internal/handlers/idle"
+	"shizoid/internal/handlers/news"
 	"shizoid/internal/handlers/winner"
 	"shizoid/internal/locale"
 	"shizoid/internal/logger"
@@ -25,7 +25,7 @@ import (
 )
 
 // Start configures and launches the cron jobs. The returned Cron should be
-// stopped on shutdown. Idle UTC window (9–20) is enforced inside idle.PokeChat.
+// stopped on shutdown.
 func Start(b *bot.Bot) *cron.Cron {
 	c := cron.New(cron.WithChain(
 		cron.Recover(cron.DefaultLogger),
@@ -35,9 +35,6 @@ func Start(b *bot.Bot) *cron.Cron {
 	if _, err := c.AddFunc(config.Environment.WinnerCron, func() { runWinners(b) }); err != nil {
 		logger.Instance().Error("schedule winner", zap.Error(err))
 	}
-	if _, err := c.AddFunc(config.Environment.IdleCron, func() { runIdle(b) }); err != nil {
-		logger.Instance().Error("schedule idle", zap.Error(err))
-	}
 	if _, err := c.AddFunc("@daily", runMessagePrune); err != nil {
 		logger.Instance().Error("schedule message prune", zap.Error(err))
 	}
@@ -46,6 +43,9 @@ func Start(b *bot.Bot) *cron.Cron {
 	}
 	if _, err := c.AddFunc(config.Environment.CaptchaCron, func() { runCaptcha(b) }); err != nil {
 		logger.Instance().Error("schedule captcha", zap.Error(err))
+	}
+	if _, err := c.AddFunc(config.Environment.NewsCron, func() { runNews(b) }); err != nil {
+		logger.Instance().Error("schedule news", zap.Error(err))
 	}
 
 	c.Start()
@@ -121,24 +121,6 @@ func winnerLabel(label, lang string) string {
 	return label
 }
 
-func runIdle(b *bot.Bot) {
-	logger.Instance().Debug("cron: idle")
-	if !app.Ready() {
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-	defer cancel()
-	now := time.Now().UTC()
-	chats, err := app.Store().Chats.Active(ctx)
-	if err != nil {
-		logger.Instance().Error("idle: active chats", zap.Error(err))
-		return
-	}
-	for _, chat := range chats {
-		idle.PokeChat(ctx, b, chat, now)
-	}
-}
-
 func runMemory() {
 	logger.Instance().Debug("cron: memory")
 	if !app.Ready() || app.Neural() == nil {
@@ -186,6 +168,35 @@ func runMemory() {
 			logger.Instance().Error("memory: mark summarized", zap.Error(err))
 		}
 	}
+}
+
+const newsChatTimeout = 5 * time.Minute
+
+func runNews(b *bot.Bot) {
+	logger.Instance().Debug("cron: news")
+	if !app.Ready() || !app.Neural().SummaryConfigured() {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancel()
+	now := time.Now().UTC()
+	chats, err := app.Store().Chats.Active(ctx)
+	if err != nil {
+		logger.Instance().Error("news: active chats", zap.Error(err))
+		return
+	}
+	sent := 0
+	for _, chat := range chats {
+		// A per-chat deadline: generation runs over the summary chain with a full
+		// day of log, so without one a slow chat eats the whole job's budget and
+		// every chat after it in Active() order fails with a deadline error.
+		chatCtx, chatCancel := context.WithTimeout(ctx, newsChatTimeout)
+		if news.PostChat(chatCtx, b, chat, now) {
+			sent++
+		}
+		chatCancel()
+	}
+	logger.Instance().Info("cron: news done", zap.Int("issues_sent", sent), zap.Int("chats", len(chats)))
 }
 
 func runCaptcha(b *bot.Bot) {

@@ -73,6 +73,7 @@ ru:
     *Каптча:* %{captcha}
     *Приветствие:* %{greeting}
     *Победитель:* %{winner}
+    *Новости:* %{news}
     *Язык:* %{lang}
 
     *Версия:* %{version}
@@ -163,15 +164,14 @@ ru:
     turned_off: "Розыгрыш победителя выключен."
     usage: "Использование: /winner, /winner current, /winner enable [название], /winner disable"
 
-  idle:
-    - "%{asker}, ты знаешь, где %{user}?"
-    - "Эй %{asker}, %{user} уже %{days} дней не пишет — что с ним?"
-    - "%{asker}, слышно что-нибудь про %{user}? Давно молчит."
-
-  idle_cmd:
-    enabled: "Раз в день буду спрашивать про тех, кто молчит больше %{days} дней."
-    disabled: "Больше не трогаю молчунов."
-    usage: "Использование: /idle <дней> или /idle disable"
+  news:
+    current: "Стиль выпуска новостей:\n%{style}"
+    disabled: "Выключен"
+    none: "Ежедневный выпуск новостей выключен."
+    default: "общие новости"
+    enabled: "Ежедневный выпуск новостей включён. Стиль: %{style}"
+    turned_off: "Ежедневный выпуск новостей выключен."
+    usage: "Использование: /news, /news enable [стиль], /news disable"
 
   greeting:
     set: "Приветствие установлено."

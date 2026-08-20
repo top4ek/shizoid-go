@@ -49,17 +49,30 @@ and [`build/dev/config.yaml-example`](build/dev/config.yaml-example) for local d
 | `app` | `bind_to` | `3000` | Webhook/health HTTP port (prod example uses `8095`) |
 | `app` | `locale` | `ru` | Default locale for new chats |
 | `app` | `winner_cron` | `20 1 * * *` | Daily winner draw (01:20) |
-| `app` | `idle_cron` | `0 * * * *` | Hourly idle-chat poke sweep |
 | `app` | `captcha_cron` | `@every 1m` | Expiry sweep for pending captchas |
 | `app` | `memory_cron` | `0 */3 * * *` | Memory summarization for all active chats (messages since last `memory_summarized_at`) |
+| `app` | `news_cron` | `40 4 * * *` | Daily joke news issue (04:40 UTC) for chats with `/news` enabled |
 | `app` | `allow_to_all` | `false` | Reply in all chats without `/start` |
-| `app` | `app_prompt` / `summary_prompt` | see example | Neural system / memory prompts |
+| `app` | `prompts.*` | see example | Named blocks the system prompts are assembled from; shared blocks (`chat_role`, `chat_format`, `chat_length`, `telegram_markup`, `precedence`) reach every prompt that uses them |
 | `telegram` | `webhook_url` | — | Webhook mode URL; empty = long polling (`deleteWebhook` on startup) |
 | `telegram` | `webhook_secret_token` | — | Secret for webhook requests (`setWebhook` + header check); auto-generated in webhook mode if omitted |
 | `sentry` | `dsn` | — | Enables Sentry when set |
-| `neural` | `reply` / `summary` | — | Provider fallback chains for LLM replies and memory summarization |
+| `neural` | `reply` / `summary` | — | Provider fallback chains for LLM replies and for memory summarization plus news issues |
 | `neural.*` | `context_size` | — | Per-model UTF-8 byte budget for API payload; max across `reply` caps DB history; max across `summary` caps memory input |
 | `neural.*` | `sampling` | — | Optional chat/completions sampling (`temperature`, `top_p`, `top_k`, `min_p`, `presence_penalty`, `repetition_penalty`; sent as `repeat_penalty` to llama.cpp) |
+
+### Retired config keys
+
+These `app` keys were removed and are now **silently ignored** — an unknown key does
+not fail the load, so a config still carrying one falls back to the built-in default
+without any warning. Check a deployed `config.yaml` when upgrading past this change.
+
+| Removed key (and env var) | Replacement |
+| --- | --- |
+| `app_prompt` / `APP_APP_PROMPT` | `app.prompts.chat_role`, `chat_memory`, `chat_format`, `telegram_markup`, `chat_length`, `precedence` |
+| `summary_prompt` / `APP_SUMMARY_PROMPT` | `app.prompts.summary_role`, `summary_rules`, `summary_format` |
+| `idle_prompt` / `APP_IDLE_PROMPT` | none — the idle/poke feature was removed |
+| `idle_cron` / `APP_IDLE_CRON` | none — the idle/poke feature was removed |
 
 Pass `-config path/to/config.yaml` if the file is not named `config.yaml`.
 

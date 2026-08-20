@@ -43,7 +43,7 @@ func TestBuildNeuralSystem(t *testing.T) {
 	}
 	g := &Generator{}
 	got := g.buildNeuralSystem(chat)
-	assert.Equal(t, "Ты дружелюбный бот.\n\n"+chatInstructionsHeader+"Отвечай коротко.\n\n"+chatMemoryHeader+"Вася любит котов.", got)
+	assert.Equal(t, "Ты дружелюбный бот.\n\n"+config.ChatInstructionsHeader+"Отвечай коротко.\n\n"+config.ChatMemoryHeader+"Вася любит котов.", got)
 
 	empty := g.buildNeuralSystem(&models.Chat{})
 	assert.Equal(t, "Ты дружелюбный бот.", empty)

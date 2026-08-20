@@ -26,9 +26,18 @@ app:
   locale: ru
   generation_mode: neural
   winner_cron: "20 1 * * *"
-  idle_cron: "0 * * * *" # poll hourly; 9:00–21:00 UTC window enforced in code
-  # idle_prompt: override the default prompt for daily idle questions
   memory_cron: "0 */6 * * *"
+  news_cron: "40 4 * * *" # daily joke news issue, 04:40 UTC
+  # prompts: named blocks the system prompts are assembled from. Each block
+  # falls back to a built-in default when omitted. Assembly order is fixed in
+  # code (internal/config/prompts.go):
+  #   reply   = chat_role + chat_memory + chat_format + telegram_markup + chat_length + precedence
+  #   news    = news_role + news_source + news_format + telegram_markup + news_tone + precedence
+  #   summary = summary_role + summary_rules + summary_format
+  # prompts:
+  #   telegram_markup: |
+  #     [TELEGRAM MARKUP]
+  #     - Only plain text, no markup at all.
 
 neural:
   reply:
