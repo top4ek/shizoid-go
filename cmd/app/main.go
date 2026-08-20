@@ -47,7 +47,7 @@ func runMigrations(dsn string) error {
 }
 
 // run wires the process together: parse flags, bring up config, storage and the
-// bot, then serve until the signal context is cancelled.
+// bot, then serve until the signal context is canceled.
 func run(args []string) error {
 	fs := flag.NewFlagSet("shizoid", flag.ContinueOnError)
 	configPath := fs.String("config", "config.yaml", "path to config file")
@@ -70,10 +70,7 @@ func run(args []string) error {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
-	botInstance, err := newBot(ctx)
-	if err != nil {
-		return err
-	}
+	botInstance := newBot(ctx)
 
 	handlers.RegisterHandlers(ctx, botInstance)
 
@@ -119,8 +116,9 @@ func bootstrap(configPath string, migrateOnly bool) (*pgxpool.Pool, error) {
 }
 
 // newBot constructs the bot and resolves its own Telegram identity, which the
-// generator needs to tell its past replies apart from user messages.
-func newBot(ctx context.Context) (*bot.Bot, error) {
+// generator needs to tell its past replies apart from user messages. Every
+// failure here is fatal: without a usable bot there is nothing to serve.
+func newBot(ctx context.Context) *bot.Bot {
 	if err := telegram.EnsureWebhookSecret(); err != nil {
 		logger.Instance().Fatal("webhook secret token", zap.Error(err))
 	}
@@ -153,10 +151,10 @@ func newBot(ctx context.Context) (*bot.Bot, error) {
 	if err := telegram.ConfigureDelivery(ctx, botInstance); err != nil {
 		logger.Instance().Fatal("telegram delivery mode", zap.Error(err))
 	}
-	return botInstance, nil
+	return botInstance
 }
 
-// serve blocks until ctx is cancelled, receiving updates by long polling or over
+// serve blocks until ctx is canceled, receiving updates by long polling or over
 // the webhook HTTP server depending on the configured delivery mode.
 func serve(ctx context.Context, botInstance *bot.Bot) {
 	if config.Telegram.PollMode() {
