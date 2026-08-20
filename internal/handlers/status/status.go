@@ -56,6 +56,10 @@ func statusText(lang string, chat *models.Chat, pairs int) string {
 	if chat.WinnerEnabled() {
 		winnerLabel = chat.Winner.String
 	}
+	newsLabel := locale.T(lang, "news.disabled")
+	if chat.NewsEnabled() {
+		newsLabel = chat.News.String
+	}
 	return locale.T(lang, "status",
 		"active", telegram.FormatPlain(active),
 		"gab", telegram.FormatPlain(fmt.Sprint(chat.Random)),
@@ -63,6 +67,7 @@ func statusText(lang string, chat *models.Chat, pairs int) string {
 		"captcha", telegram.FormatPlain(captcha),
 		"greeting", telegram.FormatPlain(greeting),
 		"winner", telegram.FormatPlain(winnerLabel),
+		"news", telegram.FormatPlain(newsLabel),
 		"lang", telegram.FormatPlain(lang),
 		"version", telegram.FormatPlain(version.Version()),
 	)

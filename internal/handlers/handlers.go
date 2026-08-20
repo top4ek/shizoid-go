@@ -20,10 +20,10 @@ import (
 	"shizoid/internal/handlers/gab"
 	"shizoid/internal/handlers/generation"
 	"shizoid/internal/handlers/greeting"
-	"shizoid/internal/handlers/idle"
 	"shizoid/internal/handlers/ids"
 	"shizoid/internal/handlers/lang"
 	"shizoid/internal/handlers/me"
+	"shizoid/internal/handlers/news"
 	"shizoid/internal/handlers/ping"
 	"shizoid/internal/handlers/prompt"
 	"shizoid/internal/handlers/say"
@@ -58,15 +58,20 @@ type command struct {
 }
 
 func commands() []command {
-	return []command{
+	return buildCommands(app.Neural().SummaryConfigured())
+}
+
+// buildCommands lists the registered commands. /news is included only when a
+// neural summary chain is configured, since that is the chain it generates
+// issues over; without it the command would sit in the menu doing nothing.
+func buildCommands(newsEnabled bool) []command {
+	cmds := []command{
 		{name: eightball.Command, description: eightball.Description, handlerType: eightball.HandlerType, matchType: eightball.MatchType, handler: eightball.Handler},
 		{name: gab.Command, description: gab.Description, handlerType: gab.HandlerType, matchType: gab.MatchType, handler: gab.Handler,
 			role: roleAdmin, replyOnDeny: true, needsReady: true, needsEnabled: true},
 		{name: generation.Command, description: generation.Description, handlerType: generation.HandlerType, matchType: generation.MatchType, handler: generation.Handler,
 			needsEnabled: true},
 		{name: greeting.Command, description: greeting.Description, handlerType: greeting.HandlerType, matchType: greeting.MatchType, handler: greeting.Handler,
-			role: roleAdmin, replyOnDeny: true, needsReady: true, needsEnabled: true},
-		{name: idle.Command, description: idle.Description, handlerType: idle.HandlerType, matchType: idle.MatchType, handler: idle.Handler,
 			role: roleAdmin, replyOnDeny: true, needsReady: true, needsEnabled: true},
 		{name: ids.Command, description: ids.Description, handlerType: ids.HandlerType, matchType: ids.MatchType, handler: ids.Handler},
 		{name: lang.Command, description: lang.Description, handlerType: lang.HandlerType, matchType: lang.MatchType, handler: lang.Handler,
@@ -88,6 +93,11 @@ func commands() []command {
 		{name: winner.Command, description: winner.Description, handlerType: winner.HandlerType, matchType: winner.MatchType, handler: winner.Handler,
 			needsReady: true, needsEnabled: true},
 	}
+	if newsEnabled {
+		cmds = append(cmds, command{name: news.Command, description: news.Description, handlerType: news.HandlerType, matchType: news.MatchType, handler: news.Handler,
+			needsReady: true, needsEnabled: true})
+	}
+	return cmds
 }
 
 // gate enforces the command's declared requirements once, so handlers do not

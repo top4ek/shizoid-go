@@ -73,6 +73,7 @@ en:
     *Captcha:* %{captcha}
     *Greeting:* %{greeting}
     *Winner:* %{winner}
+    *News:* %{news}
     *Language:* %{lang}
 
     *Version:* %{version}
@@ -161,16 +162,14 @@ en:
     turned_off: "Winner draw disabled."
     usage: "Usage: /winner, /winner current, /winner enable [label], /winner disable"
 
-  idle:
-    - "%{asker}, do you know where %{user} is?"
-    - "Hey %{asker}, %{user} hasn't written for %{days} days — what's up?"
-    - "%{asker}, heard anything from %{user}? They've gone quiet."
-    - "By the way %{asker}, is %{user} still alive? They've been silent."
-
-  idle_cmd:
-    enabled: "Once a day I'll ask about members silent for more than %{days} days."
-    disabled: "I won't poke the silent anymore."
-    usage: "Usage: /idle <days> or /idle disable"
+  news:
+    current: "News issue style:\n%{style}"
+    disabled: "Disabled"
+    none: "The daily news issue is off."
+    default: "general chat news"
+    enabled: "Daily news issue enabled. Style: %{style}"
+    turned_off: "Daily news issue disabled."
+    usage: "Usage: /news, /news enable [style], /news disable"
 
   greeting:
     set: "Greeting set."

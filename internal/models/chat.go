@@ -21,13 +21,12 @@ type Chat struct {
 	LastName           sql.NullString `db:"last_name"`
 	Username           sql.NullString `db:"username"`
 	ActiveAt           sql.NullTime   `db:"active_at"`
-	IdleDays           sql.NullInt64  `db:"idle_days"`
 	CaptchaEnabledAt   sql.NullTime   `db:"captcha_enabled_at"`
 	CaptchaGreeting    sql.NullString `db:"captcha_greeting"`
 	SystemPrompt       sql.NullString `db:"system_prompt"`
 	Memory             sql.NullString `db:"memory"`
-	IdlePokedAt        sql.NullTime   `db:"idle_poked_at"`
 	MemorySummarizedAt sql.NullTime   `db:"memory_summarized_at"`
+	News               sql.NullString `db:"news"`
 	CreatedAt          time.Time      `db:"created_at"`
 }
 
@@ -43,23 +42,30 @@ func (c *Chat) WinnerEnabled() bool {
 	return c.Winner.Valid && c.Winner.String != ""
 }
 
+// NewsEnabled reports whether the daily news issue is configured. The stored
+// value is the issue style ("sport", "general news", a tone), so an empty or
+// NULL value means the issue is off for this chat.
+func (c *Chat) NewsEnabled() bool {
+	return c.News.Valid && c.News.String != ""
+}
+
 // CaptchaEnabled reports whether captcha is active for new members.
 func (c *Chat) CaptchaEnabled() bool {
 	return c.CaptchaEnabledAt.Valid
 }
 
 const chatColumns = `id, kind, random, eightball, greeting, winner, locale, generation_mode,
-	title, first_name, last_name, username, active_at, idle_days,
+	title, first_name, last_name, username, active_at,
 	captcha_enabled_at, captcha_greeting, system_prompt, memory,
-	idle_poked_at, memory_summarized_at, created_at`
+	memory_summarized_at, news, created_at`
 
 func scanChat(row interface{ Scan(...any) error }) (*Chat, error) {
 	c := &Chat{}
 	err := row.Scan(
 		&c.ID, &c.Kind, &c.Random, &c.Eightball, &c.Greeting, &c.Winner, &c.Locale, &c.GenerationMode,
-		&c.Title, &c.FirstName, &c.LastName, &c.Username, &c.ActiveAt, &c.IdleDays,
+		&c.Title, &c.FirstName, &c.LastName, &c.Username, &c.ActiveAt,
 		&c.CaptchaEnabledAt, &c.CaptchaGreeting, &c.SystemPrompt, &c.Memory,
-		&c.IdlePokedAt, &c.MemorySummarizedAt, &c.CreatedAt,
+		&c.MemorySummarizedAt, &c.News, &c.CreatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -133,6 +139,11 @@ func (r chats) SetMemory(ctx context.Context, id int64, memory sql.NullString) e
 	return err
 }
 
+func (r chats) SetNews(ctx context.Context, id int64, style sql.NullString) error {
+	_, err := r.db.Exec(ctx, `UPDATE chats SET news = $2 WHERE id = $1`, id, style)
+	return err
+}
+
 func (r chats) SetCaptcha(ctx context.Context, id int64, enabled bool) error {
 	const q = `UPDATE chats SET
 		captcha_enabled_at = CASE WHEN $2 THEN NOW() ELSE NULL END
@@ -141,18 +152,8 @@ func (r chats) SetCaptcha(ctx context.Context, id int64, enabled bool) error {
 	return err
 }
 
-func (r chats) SetIdle(ctx context.Context, id int64, days sql.NullInt64) error {
-	_, err := r.db.Exec(ctx, `UPDATE chats SET idle_days = $2 WHERE id = $1`, id, days)
-	return err
-}
-
 func (r chats) SetGreeting(ctx context.Context, id int64, enabled bool) error {
 	_, err := r.db.Exec(ctx, `UPDATE chats SET greeting = $2 WHERE id = $1`, id, enabled)
-	return err
-}
-
-func (r chats) SetIdlePokedAt(ctx context.Context, id int64, at time.Time) error {
-	_, err := r.db.Exec(ctx, `UPDATE chats SET idle_poked_at = $2 WHERE id = $1`, id, at)
 	return err
 }
 
