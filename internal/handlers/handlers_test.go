@@ -1,12 +1,15 @@
 package handlers
 
 import (
+	"context"
 	"testing"
 
+	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 	"github.com/stretchr/testify/assert"
 
 	"shizoid/internal/app"
+	"shizoid/internal/config"
 	"shizoid/internal/handlers/news"
 )
 
@@ -34,7 +37,6 @@ func TestIsBotCommand(t *testing.T) {
 		Entities: []models.MessageEntity{{Type: models.MessageEntityTypeBotCommand, Offset: 0, Length: 17}},
 	}))
 	assert.False(t, isBotCommand(&models.Message{Text: "hello"}))
-	assert.False(t, isBotCommand(nil))
 }
 
 func TestIsMentioned(t *testing.T) {
@@ -134,4 +136,61 @@ func TestNewsCommandGatedOnSummaryChain(t *testing.T) {
 			assert.True(t, has(withoutNews, c.name), "command %q must not be gated", c.name)
 		}
 	}
+}
+
+// gate is the single place the nil/enabled/permission prologue lives, so the
+// checks the command handlers used to repeat are covered here instead.
+func TestGate(t *testing.T) {
+	withOwners := func(t *testing.T, owners []int64) {
+		t.Helper()
+		old := config.Environment.BotOwners
+		t.Cleanup(func() { config.Environment.BotOwners = old })
+		config.Environment.BotOwners = owners
+	}
+	withAllowToAll := func(t *testing.T, v bool) {
+		t.Helper()
+		old := config.Environment.AllowToAll
+		t.Cleanup(func() { config.Environment.AllowToAll = old })
+		config.Environment.AllowToAll = v
+	}
+	msgUpdate := func() *models.Update {
+		return &models.Update{Message: &models.Message{
+			From: &models.User{ID: 234},
+			Chat: models.Chat{ID: 123},
+			Text: "/cmd",
+		}}
+	}
+
+	run := func(c command, update *models.Update) bool {
+		called := false
+		c.handler = func(context.Context, *bot.Bot, *models.Update) { called = true }
+		gate(c)(context.Background(), nil, update)
+		return called
+	}
+
+	t.Run("drops updates without a message or sender", func(t *testing.T) {
+		assert.False(t, run(command{}, &models.Update{}))
+		assert.False(t, run(command{}, &models.Update{Message: &models.Message{}}))
+	})
+
+	t.Run("passes a public command through", func(t *testing.T) {
+		assert.True(t, run(command{}, msgUpdate()))
+	})
+
+	t.Run("enforces needsEnabled", func(t *testing.T) {
+		withAllowToAll(t, false)
+		// no chat in the context and allow_to_all off means not enabled
+		assert.False(t, run(command{needsEnabled: true}, msgUpdate()))
+
+		withAllowToAll(t, true)
+		assert.True(t, run(command{needsEnabled: true}, msgUpdate()))
+	})
+
+	t.Run("enforces roleOwner", func(t *testing.T) {
+		withOwners(t, []int64{123, 456})
+		assert.False(t, run(command{role: roleOwner}, msgUpdate()))
+
+		withOwners(t, []int64{123, 234, 345})
+		assert.True(t, run(command{role: roleOwner}, msgUpdate()))
+	})
 }

@@ -32,7 +32,7 @@ func DefaultHandler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 	if msg.Text == "" || msg.From == nil || isBotCommand(msg) {
 		return
 	}
-	if !app.Ready() || !app.Enabled(ctx) {
+	if !app.Enabled(ctx) {
 		return
 	}
 	if binary_dice.Respond(ctx, b, update) {

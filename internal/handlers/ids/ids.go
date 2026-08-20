@@ -18,9 +18,6 @@ const (
 )
 
 func Handler(ctx context.Context, b *bot.Bot, update *models.Update) {
-	if update.Message == nil || update.Message.From == nil {
-		return
-	}
 	telegram.Reply(ctx, b, update, text(app.Locale(ctx), update))
 }
 

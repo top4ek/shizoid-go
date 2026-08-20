@@ -19,9 +19,6 @@ const (
 )
 
 func Handler(ctx context.Context, b *bot.Bot, update *models.Update) {
-	if update.Message == nil || update.Message.From == nil {
-		return
-	}
 	text := responseText(app.Locale(ctx), update)
 	if text == "" {
 		return

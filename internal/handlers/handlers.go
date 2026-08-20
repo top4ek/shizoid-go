@@ -51,7 +51,6 @@ type command struct {
 
 	role         role
 	replyOnDeny  bool // reply with the localized denial instead of staying silent
-	needsReady   bool // requires the data layer (app.Ready)
 	needsEnabled bool // requires the bot enabled in this chat (app.Enabled)
 }
 
@@ -66,47 +65,44 @@ func buildCommands(newsEnabled bool) []command {
 	cmds := []command{
 		{name: eightball.Command, description: eightball.Description, handler: eightball.Handler},
 		{name: gab.Command, description: gab.Description, handler: gab.Handler,
-			role: roleAdmin, replyOnDeny: true, needsReady: true, needsEnabled: true},
+			role: roleAdmin, replyOnDeny: true, needsEnabled: true},
 		{name: generation.Command, description: generation.Description, handler: generation.Handler,
 			needsEnabled: true},
 		{name: greeting.Command, description: greeting.Description, handler: greeting.Handler,
-			role: roleAdmin, replyOnDeny: true, needsReady: true, needsEnabled: true},
+			role: roleAdmin, replyOnDeny: true, needsEnabled: true},
 		{name: ids.Command, description: ids.Description, handler: ids.Handler},
 		{name: lang.Command, description: lang.Description, handler: lang.Handler,
-			needsReady: true, needsEnabled: true},
+			needsEnabled: true},
 		{name: me.Command, description: me.Description, handler: me.Handler},
 		{name: ping.Command, description: ping.Description, handler: ping.Handler},
 		{name: prompt.Command, description: prompt.Description, handler: prompt.Handler,
-			role: roleOwner, replyOnDeny: true, needsReady: true, needsEnabled: true},
+			role: roleOwner, replyOnDeny: true, needsEnabled: true},
 		{name: say.Command, description: say.Description, handler: say.Handler,
 			role: roleOwner},
 		{name: start.Command, description: start.Description, handler: start.Handler,
-			role: roleOwner, needsReady: true},
+			role: roleOwner},
 		{name: status.Command, description: status.Description, handler: status.Handler,
-			needsReady: true, needsEnabled: true},
+			needsEnabled: true},
 		{name: stop.Command, description: stop.Description, handler: stop.Handler,
-			role: roleOwner, needsReady: true},
+			role: roleOwner},
 		{name: captcha.Command, description: captcha.Description, handler: captcha.Handler,
-			role: roleAdmin, replyOnDeny: true, needsReady: true, needsEnabled: true},
+			role: roleAdmin, replyOnDeny: true, needsEnabled: true},
 		{name: winner.Command, description: winner.Description, handler: winner.Handler,
-			needsReady: true, needsEnabled: true},
+			needsEnabled: true},
 	}
 	if newsEnabled {
 		cmds = append(cmds, command{name: news.Command, description: news.Description, handler: news.Handler,
-			needsReady: true, needsEnabled: true})
+			needsEnabled: true})
 	}
 	return cmds
 }
 
 // gate enforces the command's declared requirements once, so handlers do not
-// repeat nil/ready/enabled/permission prologues.
+// repeat nil/enabled/permission prologues.
 func gate(c command) bot.HandlerFunc {
 	return func(ctx context.Context, b *bot.Bot, update *models.Update) {
 		msg := update.Message
 		if msg == nil || msg.From == nil {
-			return
-		}
-		if c.needsReady && !app.Ready() {
 			return
 		}
 		if c.needsEnabled && !app.Enabled(ctx) {

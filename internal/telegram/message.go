@@ -134,7 +134,7 @@ func prepareOutboundText(text string) string {
 }
 
 func persistBotMessage(ctx context.Context, chatID int64, text string) {
-	if text == "" || !app.Ready() || app.SkipMessageHistory(ctx) {
+	if text == "" || app.SkipMessageHistory(ctx) {
 		return
 	}
 	botID := app.BotID()

@@ -14,9 +14,6 @@ import (
 
 // OnMemberJoined claims greeting for one member; returns true if the chat message should be sent.
 func OnMemberJoined(ctx context.Context, chatID int64, member tgmodels.User) (bool, error) {
-	if !app.Ready() {
-		return false, nil
-	}
 	greeted, err := app.Store().Participations.GreetingGreeted(ctx, chatID, member.ID)
 	if err != nil {
 		return false, err
@@ -44,9 +41,6 @@ func OnMemberJoined(ctx context.Context, chatID int64, member tgmodels.User) (bo
 
 // Send posts the configured greeting text to the chat. The second return value reports whether a message was sent.
 func Send(ctx context.Context, b *bot.Bot, chatID int64) (bool, error) {
-	if !app.Ready() {
-		return false, nil
-	}
 	text, ok, err := app.Store().Greetings.Get(ctx, chatID)
 	if err != nil {
 		return false, err
