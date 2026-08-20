@@ -21,6 +21,7 @@ import (
 	"shizoid/internal/handlers/winner"
 	"shizoid/internal/locale"
 	"shizoid/internal/logger"
+	"shizoid/internal/models"
 	"shizoid/internal/telegram"
 )
 
@@ -32,66 +33,87 @@ func Start(b *bot.Bot) *cron.Cron {
 		cron.SkipIfStillRunning(cron.DefaultLogger),
 	))
 
-	if _, err := c.AddFunc(config.Environment.WinnerCron, func() { runWinners(b) }); err != nil {
-		logger.Instance().Error("schedule winner", zap.Error(err))
-	}
-	if _, err := c.AddFunc("@daily", runMessagePrune); err != nil {
-		logger.Instance().Error("schedule message prune", zap.Error(err))
-	}
-	if _, err := c.AddFunc(config.Environment.MemoryCron, func() { runMemory() }); err != nil {
-		logger.Instance().Error("schedule memory", zap.Error(err))
-	}
-	if _, err := c.AddFunc(config.Environment.CaptchaCron, func() { runCaptcha(b) }); err != nil {
-		logger.Instance().Error("schedule captcha", zap.Error(err))
-	}
-	if _, err := c.AddFunc(config.Environment.NewsCron, func() { runNews(b) }); err != nil {
-		logger.Instance().Error("schedule news", zap.Error(err))
+	for _, job := range []struct {
+		name string
+		spec string
+		run  func()
+	}{
+		{"winner", config.Environment.WinnerCron, func() { runWinners(b) }},
+		{"message prune", "@daily", runMessagePrune},
+		{"memory", config.Environment.MemoryCron, runMemory},
+		{"captcha", config.Environment.CaptchaCron, func() { runCaptcha(b) }},
+		{"news", config.Environment.NewsCron, func() { runNews(b) }},
+	} {
+		if _, err := c.AddFunc(job.spec, job.run); err != nil {
+			logger.Instance().Error("schedule "+job.name, zap.String("spec", job.spec), zap.Error(err))
+		}
 	}
 
 	c.Start()
 	return c
 }
 
-func runWinners(b *bot.Bot) {
-	logger.Instance().Debug("cron: winners")
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+// forEachActiveChat runs fn over every active chat under a job-wide deadline,
+// giving each chat its own slice of it so one slow chat cannot starve the chats
+// after it in Active() order. fn reports whether it did any work; the count is
+// logged when the job finishes.
+func forEachActiveChat(name string, budget, perChat time.Duration, fn func(ctx context.Context, chat *models.Chat) bool) {
+	logger.Instance().Debug("cron: " + name)
+	ctx, cancel := context.WithTimeout(context.Background(), budget)
 	defer cancel()
+
 	chats, err := app.Store().Chats.Active(ctx)
 	if err != nil {
-		logger.Instance().Error("winners: active chats", zap.Error(err))
+		logger.Instance().Error(name+": active chats", zap.Error(err))
 		return
 	}
+	done := 0
 	for _, chat := range chats {
+		chatCtx, chatCancel := context.WithTimeout(ctx, perChat)
+		if fn(chatCtx, chat) {
+			done++
+		}
+		chatCancel()
+	}
+	logger.Instance().Info("cron: "+name+" done",
+		zap.Int("chats", len(chats)),
+		zap.Int("handled", done),
+	)
+}
+
+func runWinners(b *bot.Bot) {
+	forEachActiveChat("winners", 10*time.Minute, time.Minute, func(ctx context.Context, chat *models.Chat) bool {
 		if !chat.WinnerEnabled() {
-			continue
+			return false
 		}
 		done, err := app.Store().Winners.HasToday(ctx, chat.ID)
 		if err != nil {
 			logger.Instance().Error("winners: has today", zap.Error(err))
-			continue
+			return false
 		}
 		if done {
-			continue
+			return false
 		}
 		top, err := app.Store().Participations.TopByScore(ctx, chat.ID, 3)
 		if err != nil || len(top) == 0 {
-			continue
+			return false
 		}
 		chosen := top[rand.IntN(len(top))]
 		inserted, err := app.Store().Winners.Create(ctx, chat.ID, chosen.UserID)
 		if err != nil {
 			logger.Instance().Error("winners: create", zap.Error(err))
-			continue
+			return false
 		}
 		if !inserted {
-			continue
+			return false
 		}
 		if err := app.Store().Participations.ResetScores(ctx, chat.ID); err != nil {
 			logger.Instance().Error("winners: reset", zap.Error(err))
 		}
 		announceWinner(ctx, b, chat.ID, chat.Locale, winnerLabel(chat.Winner.String, chat.Locale),
 			chosen.UserID, chosen.Username, chosen.Name)
-	}
+		return true
+	})
 }
 
 func announceWinner(ctx context.Context, b *bot.Bot, chatID int64, lang, label string, userID int64, username, name string) {
@@ -119,23 +141,14 @@ func winnerLabel(label, lang string) string {
 }
 
 func runMemory() {
-	logger.Instance().Debug("cron: memory")
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-	defer cancel()
-
-	chats, err := app.Store().Chats.Active(ctx)
-	if err != nil {
-		logger.Instance().Error("memory: active chats", zap.Error(err))
-		return
-	}
-	for _, chat := range chats {
+	forEachActiveChat("memory", 10*time.Minute, summaryChatTimeout, func(ctx context.Context, chat *models.Chat) bool {
 		existing := ""
 		if chat.Memory.Valid {
 			existing = chat.Memory.String
 		}
 		budget := summaryMessageBudget(existing)
 		if budget <= 0 {
-			continue
+			return false
 		}
 		since := time.Time{}
 		if chat.MemorySummarizedAt.Valid {
@@ -143,7 +156,7 @@ func runMemory() {
 		}
 		msgs, err := app.Store().Messages.TextsSinceByBytes(ctx, chat.ID, since, budget)
 		if err != nil || len(msgs) == 0 {
-			continue
+			return false
 		}
 		logger.Instance().Debug("memory summarize",
 			zap.Int64("chat_id", chat.ID),
@@ -151,46 +164,32 @@ func runMemory() {
 		)
 		summary, err := app.Neural().Summarize(ctx, config.Environment.SummaryPrompt, existing, msgs)
 		if err != nil || strings.TrimSpace(summary) == "" {
-			continue
+			return false
 		}
 		summary = truncateRunes(summary, 4096)
 		if err := app.Store().Chats.SetMemory(ctx, chat.ID, sql.NullString{String: summary, Valid: true}); err != nil {
 			logger.Instance().Error("memory: store", zap.Error(err))
-			continue
+			return false
 		}
 		if err := app.Store().Chats.SetMemorySummarizedAt(ctx, chat.ID, time.Now()); err != nil {
 			logger.Instance().Error("memory: mark summarized", zap.Error(err))
 		}
-	}
+		return true
+	})
 }
 
-const newsChatTimeout = 5 * time.Minute
+// summaryChatTimeout bounds one chat's turn on the summary chain, which runs
+// over far more context than a reply and is the slowest call in the codebase.
+const summaryChatTimeout = 5 * time.Minute
 
 func runNews(b *bot.Bot) {
-	logger.Instance().Debug("cron: news")
 	if !app.Neural().SummaryConfigured() {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
-	defer cancel()
 	now := time.Now().UTC()
-	chats, err := app.Store().Chats.Active(ctx)
-	if err != nil {
-		logger.Instance().Error("news: active chats", zap.Error(err))
-		return
-	}
-	sent := 0
-	for _, chat := range chats {
-		// A per-chat deadline: generation runs over the summary chain with a full
-		// day of log, so without one a slow chat eats the whole job's budget and
-		// every chat after it in Active() order fails with a deadline error.
-		chatCtx, chatCancel := context.WithTimeout(ctx, newsChatTimeout)
-		if news.PostChat(chatCtx, b, chat, now) {
-			sent++
-		}
-		chatCancel()
-	}
-	logger.Instance().Info("cron: news done", zap.Int("issues_sent", sent), zap.Int("chats", len(chats)))
+	forEachActiveChat("news", 30*time.Minute, summaryChatTimeout, func(ctx context.Context, chat *models.Chat) bool {
+		return news.PostChat(ctx, b, chat, now)
+	})
 }
 
 func runCaptcha(b *bot.Bot) {

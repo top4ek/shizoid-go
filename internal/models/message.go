@@ -29,20 +29,8 @@ func (r messages) Append(ctx context.Context, chatID, userID int64, text string)
 
 // ChatIDs lists the chats that currently have stored messages.
 func (r messages) ChatIDs(ctx context.Context) ([]int64, error) {
-	rows, err := r.db.Query(ctx, `SELECT DISTINCT chat_id FROM messages`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []int64
-	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		out = append(out, id)
-	}
-	return out, rows.Err()
+	return queryRows(ctx, r.db, `SELECT DISTINCT chat_id FROM messages`, nil,
+		func(rows pgx.Rows) (id int64, err error) { return id, rows.Scan(&id) })
 }
 
 // PruneChatByBytes keeps the newest keepBytes of history for one chat. Pruning
@@ -71,195 +59,126 @@ func (r messages) PruneChatByBytes(ctx context.Context, chatID int64, keepBytes 
 	return res.RowsAffected(), nil
 }
 
-func (r messages) RecentByBytes(ctx context.Context, chatID int64, maxBytes int) ([]MessageRow, error) {
-	if maxBytes <= 0 {
-		return nil, nil
+// The byte-budgeted history queries below all have the same shape: walk the
+// chat's messages newest-first, keep the prefix whose cumulative text bytes fit
+// the budget, and if that prefix is empty fall back to the single latest row so
+// a message larger than the whole budget is not silently dropped.
+
+const (
+	// projections inside the window subquery (aliased m/u) and back out of it
+	messageRowInner = `m.user_id, m.text, u.first_name, u.last_name, u.username, u.is_bot`
+	messageRowOuter = `user_id, text, first_name, last_name, username, is_bot`
+	usersJoin       = `LEFT JOIN users u ON u.id = m.user_id`
+)
+
+// byteBudgetedQuery renders the windowed query. A zero since drops the time
+// bound, which also shifts the budget placeholder from $3 to $2.
+func byteBudgetedQuery(outer, inner, join string, withSince bool, order string) string {
+	where, budget := `WHERE m.chat_id = $1`, `$2`
+	if withSince {
+		where, budget = where+` AND m.created_at >= $2`, `$3`
 	}
-	rows, err := r.db.Query(ctx, `
-		SELECT user_id, text, first_name, last_name, username, is_bot
+	return `
+		SELECT ` + outer + `
 		FROM (
-			SELECT m.user_id, m.text,
-				u.first_name, u.last_name, u.username, u.is_bot,
-				m.created_at, m.id,
+			SELECT ` + inner + `, m.created_at, m.id,
 				SUM(octet_length(m.text)) OVER (
 					ORDER BY m.created_at DESC, m.id DESC
 				) AS cum_bytes
 			FROM messages m
-			LEFT JOIN users u ON u.id = m.user_id
-			WHERE m.chat_id = $1
+			` + join + `
+			` + where + `
 		) ranked
-		WHERE cum_bytes <= $2
-		ORDER BY created_at DESC, id DESC`, chatID, maxBytes)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out, err := scanMessageRows(rows)
-	if err != nil {
-		return nil, err
-	}
-	if len(out) > 0 {
-		return out, nil
-	}
-	return r.recentLatestMessages(ctx, chatID)
+		WHERE cum_bytes <= ` + budget + `
+		ORDER BY created_at ` + order + `, id ` + order
 }
 
-func (r messages) RecentByBytesSince(ctx context.Context, chatID int64, since time.Time, maxBytes int) ([]MessageRow, error) {
+// latestQuery renders the single-newest-row fallback for the same projection.
+func latestQuery(inner, join string, withSince bool) string {
+	where := `WHERE m.chat_id = $1`
+	if withSince {
+		where += ` AND m.created_at >= $2`
+	}
+	return `
+		SELECT ` + inner + `
+		FROM messages m
+		` + join + `
+		` + where + `
+		ORDER BY m.created_at DESC, m.id DESC
+		LIMIT 1`
+}
+
+// budgetArgs orders the placeholders to match byteBudgetedQuery.
+func budgetArgs(chatID int64, since time.Time, maxBytes int) []any {
 	if since.IsZero() {
-		return r.RecentByBytes(ctx, chatID, maxBytes)
+		return []any{chatID, maxBytes}
 	}
+	return []any{chatID, since, maxBytes}
+}
+
+func scanMessageRow(rows pgx.Rows) (MessageRow, error) {
+	var row MessageRow
+	err := rows.Scan(&row.UserID, &row.Text, &row.FirstName, &row.LastName, &row.Username, &row.IsBot)
+	return row, err
+}
+
+func scanText(rows pgx.Rows) (string, error) {
+	var t string
+	err := rows.Scan(&t)
+	return t, err
+}
+
+// RecentByBytes returns the newest messages fitting maxBytes, newest first.
+func (r messages) RecentByBytes(ctx context.Context, chatID int64, maxBytes int) ([]MessageRow, error) {
+	return r.recentRows(ctx, chatID, time.Time{}, maxBytes)
+}
+
+// RecentByBytesSince is RecentByBytes bounded to messages at or after since.
+func (r messages) RecentByBytesSince(ctx context.Context, chatID int64, since time.Time, maxBytes int) ([]MessageRow, error) {
+	return r.recentRows(ctx, chatID, since, maxBytes)
+}
+
+func (r messages) recentRows(ctx context.Context, chatID int64, since time.Time, maxBytes int) ([]MessageRow, error) {
 	if maxBytes <= 0 {
 		return nil, nil
 	}
-	rows, err := r.db.Query(ctx, `
-		SELECT user_id, text, first_name, last_name, username, is_bot
-		FROM (
-			SELECT m.user_id, m.text,
-				u.first_name, u.last_name, u.username, u.is_bot,
-				m.created_at, m.id,
-				SUM(octet_length(m.text)) OVER (
-					ORDER BY m.created_at DESC, m.id DESC
-				) AS cum_bytes
-			FROM messages m
-			LEFT JOIN users u ON u.id = m.user_id
-			WHERE m.chat_id = $1 AND m.created_at >= $2
-		) ranked
-		WHERE cum_bytes <= $3
-		ORDER BY created_at DESC, id DESC`, chatID, since, maxBytes)
-	if err != nil {
-		return nil, err
+	withSince := !since.IsZero()
+	out, err := queryRows(ctx, r.db,
+		byteBudgetedQuery(messageRowOuter, messageRowInner, usersJoin, withSince, `DESC`),
+		budgetArgs(chatID, since, maxBytes), scanMessageRow)
+	if err != nil || len(out) > 0 {
+		return out, err
 	}
-	defer rows.Close()
-	out, err := scanMessageRows(rows)
-	if err != nil {
-		return nil, err
+	args := []any{chatID}
+	if withSince {
+		args = append(args, since)
 	}
-	if len(out) > 0 {
-		return out, nil
-	}
-	return r.recentLatestMessagesSince(ctx, chatID, since)
+	return queryRows(ctx, r.db, latestQuery(messageRowInner, usersJoin, withSince), args, scanMessageRow)
 }
 
+// RecentTextsByBytes returns the newest message texts fitting maxBytes, newest
+// first.
 func (r messages) RecentTextsByBytes(ctx context.Context, chatID int64, maxBytes int) ([]string, error) {
 	if maxBytes <= 0 {
 		return nil, nil
 	}
-	rows, err := r.db.Query(ctx, `
-		SELECT text
-		FROM (
-			SELECT text, created_at, id,
-				SUM(octet_length(text)) OVER (
-					ORDER BY created_at DESC, id DESC
-				) AS cum_bytes
-			FROM messages
-			WHERE chat_id = $1
-		) ranked
-		WHERE cum_bytes <= $2
-		ORDER BY created_at DESC, id DESC`, chatID, maxBytes)
-	if err != nil {
-		return nil, err
+	texts, err := queryRows(ctx, r.db,
+		byteBudgetedQuery(`text`, `m.text`, ``, false, `DESC`),
+		budgetArgs(chatID, time.Time{}, maxBytes), scanText)
+	if err != nil || len(texts) > 0 {
+		return texts, err
 	}
-	defer rows.Close()
-	var texts []string
-	for rows.Next() {
-		var t string
-		if err := rows.Scan(&t); err != nil {
-			return nil, err
-		}
-		texts = append(texts, t)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	if len(texts) > 0 {
-		return texts, nil
-	}
-	return r.recentLatestMessageText(ctx, chatID)
+	return queryRows(ctx, r.db, latestQuery(`m.text`, ``, false), []any{chatID}, scanText)
 }
 
+// TextsSinceByBytes returns the texts at or after since that fit maxBytes, in
+// chronological order. Unlike the others it has no single-row fallback: the
+// summarizer treats an empty window as "nothing new to summarize".
 func (r messages) TextsSinceByBytes(ctx context.Context, chatID int64, since time.Time, maxBytes int) ([]string, error) {
 	if maxBytes <= 0 {
 		return nil, nil
 	}
-	rows, err := r.db.Query(ctx, `
-		SELECT text
-		FROM (
-			SELECT text, created_at, id,
-				SUM(octet_length(text)) OVER (
-					ORDER BY created_at DESC, id DESC
-				) AS cum_bytes
-			FROM messages
-			WHERE chat_id = $1 AND created_at >= $2
-		) ranked
-		WHERE cum_bytes <= $3
-		ORDER BY created_at ASC, id ASC`, chatID, since, maxBytes)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var texts []string
-	for rows.Next() {
-		var t string
-		if err := rows.Scan(&t); err != nil {
-			return nil, err
-		}
-		texts = append(texts, t)
-	}
-	return texts, rows.Err()
-}
-
-func (r messages) recentLatestMessages(ctx context.Context, chatID int64) ([]MessageRow, error) {
-	rows, err := r.db.Query(ctx, `
-		SELECT m.user_id, m.text, u.first_name, u.last_name, u.username, u.is_bot
-		FROM messages m
-		LEFT JOIN users u ON u.id = m.user_id
-		WHERE m.chat_id = $1
-		ORDER BY m.created_at DESC, m.id DESC
-		LIMIT 1`, chatID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	return scanMessageRows(rows)
-}
-
-func (r messages) recentLatestMessagesSince(ctx context.Context, chatID int64, since time.Time) ([]MessageRow, error) {
-	rows, err := r.db.Query(ctx, `
-		SELECT m.user_id, m.text, u.first_name, u.last_name, u.username, u.is_bot
-		FROM messages m
-		LEFT JOIN users u ON u.id = m.user_id
-		WHERE m.chat_id = $1 AND m.created_at >= $2
-		ORDER BY m.created_at DESC, m.id DESC
-		LIMIT 1`, chatID, since)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	return scanMessageRows(rows)
-}
-
-func (r messages) recentLatestMessageText(ctx context.Context, chatID int64) ([]string, error) {
-	var t string
-	err := r.db.QueryRow(ctx,
-		`SELECT text FROM messages WHERE chat_id = $1 ORDER BY created_at DESC, id DESC LIMIT 1`,
-		chatID).Scan(&t)
-	if err == pgx.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	return []string{t}, nil
-}
-
-func scanMessageRows(rows pgx.Rows) ([]MessageRow, error) {
-	var out []MessageRow
-	for rows.Next() {
-		var row MessageRow
-		if err := rows.Scan(&row.UserID, &row.Text, &row.FirstName, &row.LastName, &row.Username, &row.IsBot); err != nil {
-			return nil, err
-		}
-		out = append(out, row)
-	}
-	return out, rows.Err()
+	return queryRows(ctx, r.db,
+		byteBudgetedQuery(`text`, `m.text`, ``, true, `ASC`),
+		budgetArgs(chatID, since, maxBytes), scanText)
 }

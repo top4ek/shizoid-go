@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // Chat represents the chats table. ID equals the Telegram chat id.
@@ -153,20 +155,9 @@ func (r chats) SetMemorySummarizedAt(ctx context.Context, id int64, at time.Time
 }
 
 func (r chats) Active(ctx context.Context) ([]*Chat, error) {
-	rows, err := r.db.Query(ctx, `SELECT `+chatColumns+` FROM chats WHERE active_at IS NOT NULL`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []*Chat
-	for rows.Next() {
-		c, err := scanChat(rows)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, c)
-	}
-	return out, rows.Err()
+	return queryRows(ctx, r.db,
+		`SELECT `+chatColumns+` FROM chats WHERE active_at IS NOT NULL`, nil,
+		func(rows pgx.Rows) (*Chat, error) { return scanChat(rows) })
 }
 
 func (r chats) PairsCount(ctx context.Context, id int64) (int, error) {

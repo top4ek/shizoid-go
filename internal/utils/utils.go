@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"shizoid/internal/config"
+	"shizoid/internal/locale"
 	"shizoid/internal/telegram"
 
 	"github.com/go-telegram/bot"
@@ -40,6 +41,14 @@ func MatchesLeadingCommand(text, name, botUsername string) bool {
 		return false
 	}
 	return true
+}
+
+// CutSubcommand splits a command payload into a lowercased verb and the rest,
+// e.g. "/news enable sport" yields ("enable", "sport"). Commands whose
+// permission depends on the verb parse their payload this way.
+func CutSubcommand(update *models.Update) (verb, rest string) {
+	verb, rest, _ = strings.Cut(strings.TrimSpace(ExtractCommandPayloadText(update)), " ")
+	return strings.ToLower(verb), strings.TrimSpace(rest)
 }
 
 func ExtractCommandPayloadText(update *models.Update) string {
@@ -82,6 +91,18 @@ func IsChatAdmin(ctx context.Context, b *bot.Bot, chatID, userID int64) bool {
 			return true
 		}
 	}
+	return false
+}
+
+// RequireChatAdmin reports whether the sender may run an admin-only branch of a
+// command, replying with the localized denial when they may not. Commands whose
+// permission depends on the payload cannot declare roleAdmin, so they check here
+// instead of in handlers.gate.
+func RequireChatAdmin(ctx context.Context, b *bot.Bot, update *models.Update, lang string) bool {
+	if IsChatAdmin(ctx, b, update.Message.Chat.ID, update.Message.From.ID) {
+		return true
+	}
+	telegram.Reply(ctx, b, update, locale.Random(lang, "nok"))
 	return false
 }
 

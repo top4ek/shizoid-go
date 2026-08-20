@@ -2,6 +2,7 @@ package models
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -17,6 +18,48 @@ type DBTX interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 }
+
+// queryRows runs q and drains every row through scan. Repositories share it
+// instead of repeating the Query/Close/Next/Scan/Err loop.
+func queryRows[T any](ctx context.Context, db DBTX, q string, args []any, scan func(pgx.Rows) (T, error)) ([]T, error) {
+	rows, err := db.Query(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	return collect(rows, scan)
+}
+
+// collect drains rows through scan, closing them and reporting any iteration
+// error. Callers that already hold rows use this directly.
+func collect[T any](rows pgx.Rows, scan func(pgx.Rows) (T, error)) ([]T, error) {
+	defer rows.Close()
+	var out []T
+	for rows.Next() {
+		v, err := scan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+// queryFlag runs a "SELECT <col> IS NOT NULL" style probe, reporting false for
+// a row that does not exist rather than an error.
+func queryFlag(ctx context.Context, db DBTX, q string, args ...any) (bool, error) {
+	var flag bool
+	if err := db.QueryRow(ctx, q, args...).Scan(&flag); err != nil {
+		if notFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return flag, nil
+}
+
+// notFound reports whether err is pgx's "no rows" sentinel, which most probe
+// queries treat as a zero value rather than an error.
+func notFound(err error) bool { return errors.Is(err, pgx.ErrNoRows) }
 
 // Store aggregates the entity repositories over one connection pool.
 type Store struct {

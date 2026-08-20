@@ -23,12 +23,9 @@ func Handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 	if text == "" {
 		return
 	}
-	replyToID := 0
-	if update.Message.ReplyToMessage != nil {
-		replyToID = update.Message.ReplyToMessage.ID
-	}
-	telegram.Send(ctx, b, update, text, replyToID, true)
-	telegram.Delete(ctx, b, update.Message.Chat.ID, update.Message.ID)
+	// the rendered nickname is a user link, whose preview Telegram would turn
+	// into a tappable button
+	telegram.Impersonate(ctx, b, update, text, telegram.ChatMessageOpts{DisableLinkPreview: true})
 }
 
 func responseText(lang string, update *models.Update) string {

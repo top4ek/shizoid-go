@@ -50,14 +50,9 @@ func (r participations) ResetScores(ctx context.Context, chatID int64) error {
 }
 
 func (r participations) CaptchaSolved(ctx context.Context, chatID, userID int64) (bool, error) {
-	var solved bool
-	err := r.db.QueryRow(ctx,
+	return queryFlag(ctx, r.db,
 		`SELECT captcha_solved_at IS NOT NULL FROM participations WHERE chat_id = $1 AND user_id = $2`,
-		chatID, userID).Scan(&solved)
-	if err == pgx.ErrNoRows {
-		return false, nil
-	}
-	return solved, err
+		chatID, userID)
 }
 
 func (r participations) GetCaptchaPending(ctx context.Context, chatID, userID int64) (correctEmoji string, messageID int, ok bool, err error) {
@@ -70,7 +65,7 @@ func (r participations) GetCaptchaPending(ctx context.Context, chatID, userID in
 		  AND captcha_requested_at IS NOT NULL
 		  AND captcha_solved_at IS NULL`,
 		chatID, userID).Scan(&emoji, &msgID)
-	if err == pgx.ErrNoRows {
+	if notFound(err) {
 		return "", 0, false, nil
 	}
 	if err != nil {
@@ -84,25 +79,27 @@ func (r participations) GetCaptchaPending(ctx context.Context, chatID, userID in
 }
 
 func (r participations) GreetingGreeted(ctx context.Context, chatID, userID int64) (bool, error) {
-	var greeted bool
-	err := r.db.QueryRow(ctx,
+	return queryFlag(ctx, r.db,
 		`SELECT greeted_at IS NOT NULL FROM participations WHERE chat_id = $1 AND user_id = $2`,
-		chatID, userID).Scan(&greeted)
-	if err == pgx.ErrNoRows {
-		return false, nil
-	}
-	return greeted, err
+		chatID, userID)
 }
 
-func (r participations) TryClaimGreeting(ctx context.Context, chatID, userID int64) (bool, error) {
-	res, err := r.db.Exec(ctx, `
-		UPDATE participations SET greeted_at = NOW(), updated_at = NOW()
-		WHERE chat_id = $1 AND user_id = $2 AND greeted_at IS NULL`,
-		chatID, userID)
+// claimOnce runs a conditional UPDATE and reports whether this caller won the
+// row. Both join flows rely on it to fire exactly once per member even when
+// Telegram delivers the join twice.
+func (r participations) claimOnce(ctx context.Context, q string, chatID, userID int64) (bool, error) {
+	res, err := r.db.Exec(ctx, q, chatID, userID)
 	if err != nil {
 		return false, err
 	}
 	return res.RowsAffected() == 1, nil
+}
+
+func (r participations) TryClaimGreeting(ctx context.Context, chatID, userID int64) (bool, error) {
+	return r.claimOnce(ctx, `
+		UPDATE participations SET greeted_at = NOW(), updated_at = NOW()
+		WHERE chat_id = $1 AND user_id = $2 AND greeted_at IS NULL`,
+		chatID, userID)
 }
 
 func (r participations) ClearGreeting(ctx context.Context, chatID, userID int64) error {
@@ -114,16 +111,12 @@ func (r participations) ClearGreeting(ctx context.Context, chatID, userID int64)
 }
 
 func (r participations) TryClaimCaptcha(ctx context.Context, chatID, userID int64) (bool, error) {
-	res, err := r.db.Exec(ctx, `
+	return r.claimOnce(ctx, `
 		UPDATE participations SET captcha_requested_at = NOW(), updated_at = NOW()
 		WHERE chat_id = $1 AND user_id = $2
 		  AND captcha_solved_at IS NULL
 		  AND captcha_requested_at IS NULL`,
 		chatID, userID)
-	if err != nil {
-		return false, err
-	}
-	return res.RowsAffected() == 1, nil
 }
 
 func (r participations) SetCaptchaDetails(ctx context.Context, chatID, userID int64, emoji string, messageID int) error {
@@ -176,24 +169,18 @@ func (r participations) ExpiredPending(ctx context.Context, timeout time.Duratio
 		  AND c.captcha_enabled_at IS NOT NULL
 		  AND p.captcha_message_id IS NOT NULL
 		  AND p.captcha_requested_at < $1`
-	rows, err := r.db.Query(ctx, q, deadline)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []CaptchaPending
-	for rows.Next() {
-		var p CaptchaPending
-		var msgID sql.NullInt64
-		if err := rows.Scan(&p.ChatID, &p.UserID, &msgID); err != nil {
-			return nil, err
-		}
-		if msgID.Valid {
-			p.MessageID = int(msgID.Int64)
-		}
-		out = append(out, p)
-	}
-	return out, rows.Err()
+	return queryRows(ctx, r.db, q, []any{deadline},
+		func(rows pgx.Rows) (CaptchaPending, error) {
+			var p CaptchaPending
+			var msgID sql.NullInt64
+			if err := rows.Scan(&p.ChatID, &p.UserID, &msgID); err != nil {
+				return p, err
+			}
+			if msgID.Valid {
+				p.MessageID = int(msgID.Int64)
+			}
+			return p, nil
+		})
 }
 
 func (r participations) TopByScore(ctx context.Context, chatID int64, limit int) ([]ScoreEntry, error) {
@@ -206,18 +193,8 @@ func (r participations) TopByScore(ctx context.Context, chatID int64, limit int)
 		WHERE p.chat_id = $1 AND p.score > 0
 		ORDER BY p.score DESC
 		LIMIT $2`
-	rows, err := r.db.Query(ctx, q, chatID, limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var entries []ScoreEntry
-	for rows.Next() {
-		var e ScoreEntry
-		if err := rows.Scan(&e.UserID, &e.Username, &e.Name, &e.Score); err != nil {
-			return nil, err
-		}
-		entries = append(entries, e)
-	}
-	return entries, rows.Err()
+	return queryRows(ctx, r.db, q, []any{chatID, limit},
+		func(rows pgx.Rows) (e ScoreEntry, err error) {
+			return e, rows.Scan(&e.UserID, &e.Username, &e.Name, &e.Score)
+		})
 }

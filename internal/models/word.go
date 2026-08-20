@@ -4,9 +4,35 @@ import (
 	"context"
 	"strconv"
 	"strings"
+
+	"github.com/jackc/pgx/v5"
 )
 
 type words struct{ db DBTX }
+
+// wordPair is one (id, word) row; all three lookups below read it and fold the
+// rows into a map keyed either way.
+type wordPair struct {
+	id   int64
+	word string
+}
+
+func scanWordPair(rows pgx.Rows) (wordPair, error) {
+	var w wordPair
+	err := rows.Scan(&w.id, &w.word)
+	return w, err
+}
+
+// inPlaceholders renders "$1,$2,..." for an IN list together with its args.
+func inPlaceholders[T any](vals []T) (string, []any) {
+	ph := make([]string, len(vals))
+	args := make([]any, len(vals))
+	for i, v := range vals {
+		ph[i] = "$" + strconv.Itoa(i+1)
+		args[i] = v
+	}
+	return strings.Join(ph, ","), args
+}
 
 // EnsureIDs upserts the words and returns their ids in one round-trip
 // (the no-op DO UPDATE makes RETURNING yield pre-existing rows too).
@@ -16,24 +42,18 @@ func (r words) EnsureIDs(ctx context.Context, list []string) (map[string]int64, 
 	if len(uniq) == 0 {
 		return out, nil
 	}
-	rows, err := r.db.Query(ctx, `
+	pairs, err := queryRows(ctx, r.db, `
 		INSERT INTO words (word)
 		SELECT unnest($1::text[])
 		ON CONFLICT (word) DO UPDATE SET word = EXCLUDED.word
-		RETURNING id, word`, uniq)
+		RETURNING id, word`, []any{uniq}, scanWordPair)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var id int64
-		var word string
-		if err := rows.Scan(&id, &word); err != nil {
-			return nil, err
-		}
-		out[word] = id
+	for _, p := range pairs {
+		out[p.word] = p.id
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 func (r words) ToIDs(ctx context.Context, list []string) (map[string]int64, error) {
@@ -42,27 +62,16 @@ func (r words) ToIDs(ctx context.Context, list []string) (map[string]int64, erro
 	if len(uniq) == 0 {
 		return out, nil
 	}
-	placeholders := make([]string, len(uniq))
-	args := make([]any, len(uniq))
-	for i, w := range uniq {
-		placeholders[i] = "$" + strconv.Itoa(i+1)
-		args[i] = w
-	}
-	q := `SELECT id, word FROM words WHERE word IN (` + strings.Join(placeholders, ",") + `)`
-	rows, err := r.db.Query(ctx, q, args...)
+	ph, args := inPlaceholders(uniq)
+	pairs, err := queryRows(ctx, r.db,
+		`SELECT id, word FROM words WHERE word IN (`+ph+`)`, args, scanWordPair)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var id int64
-		var word string
-		if err := rows.Scan(&id, &word); err != nil {
-			return nil, err
-		}
-		out[word] = id
+	for _, p := range pairs {
+		out[p.word] = p.id
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 func (r words) ToWords(ctx context.Context, ids []int64) (map[int64]string, error) {
@@ -71,27 +80,16 @@ func (r words) ToWords(ctx context.Context, ids []int64) (map[int64]string, erro
 	if len(uniq) == 0 {
 		return out, nil
 	}
-	placeholders := make([]string, len(uniq))
-	args := make([]any, len(uniq))
-	for i, id := range uniq {
-		placeholders[i] = "$" + strconv.Itoa(i+1)
-		args[i] = id
-	}
-	q := `SELECT id, word FROM words WHERE id IN (` + strings.Join(placeholders, ",") + `)`
-	rows, err := r.db.Query(ctx, q, args...)
+	ph, args := inPlaceholders(uniq)
+	pairs, err := queryRows(ctx, r.db,
+		`SELECT id, word FROM words WHERE id IN (`+ph+`)`, args, scanWordPair)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var id int64
-		var word string
-		if err := rows.Scan(&id, &word); err != nil {
-			return nil, err
-		}
-		out[id] = word
+	for _, p := range pairs {
+		out[p.id] = p.word
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 func uniqueNonEmpty(in []string) []string {
