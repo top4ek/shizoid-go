@@ -23,7 +23,7 @@ func TestDailyLimitReleasedOnFailedCall(t *testing.T) {
 	}, nil)
 
 	for range 3 {
-		_, err := c.Reply(context.Background(), "", "hello")
+		_, err := reply(c, context.Background(), "", "hello")
 		require.Error(t, err)
 	}
 	assert.Equal(t, 3, calls, "failed calls must not consume the daily budget")
@@ -43,7 +43,7 @@ func TestDailyLimitReleasedOnEmptyResponse(t *testing.T) {
 	}, nil)
 
 	for range 2 {
-		_, err := c.Reply(context.Background(), "", "hello")
+		_, err := reply(c, context.Background(), "", "hello")
 		require.Error(t, err)
 	}
 	assert.Equal(t, 2, calls, "empty completions must not consume the daily budget")

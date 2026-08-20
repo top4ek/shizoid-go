@@ -2,7 +2,6 @@ package utils
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math/rand/v2"
 	"slices"
@@ -54,7 +53,7 @@ func ExtractCommandPayloadText(update *models.Update) string {
 	return ""
 }
 
-func IsOwner(userID int64) bool {
+func isOwner(userID int64) bool {
 	return slices.Contains(config.Environment.BotOwners, userID)
 }
 
@@ -62,13 +61,13 @@ func IsBotOwner(update *models.Update) bool {
 	if update == nil || update.Message == nil || update.Message.From == nil {
 		return false
 	}
-	return IsOwner(update.Message.From.ID)
+	return isOwner(update.Message.From.ID)
 }
 
 // IsChatAdmin reports whether the user is an administrator (or creator) of the
 // chat, or a bot owner. In private chats the sole user is treated as admin.
 func IsChatAdmin(ctx context.Context, b *bot.Bot, chatID, userID int64) bool {
-	if IsOwner(userID) {
+	if isOwner(userID) {
 		return true
 	}
 	if chatID > 0 && chatID == userID {
@@ -98,17 +97,6 @@ func adminUserID(member models.ChatMember) int64 {
 		}
 	}
 	return 0
-}
-
-func UserName(user *models.User) (string, error) {
-	if user == nil {
-		return "Unknown", errors.New("user is nil")
-	}
-	name := DisplayName(user.Username, user.FirstName, user.LastName)
-	if name == "Unknown" {
-		return name, errors.New("unable to find username")
-	}
-	return name, nil
 }
 
 // DisplayName picks the best available label for a Telegram user.

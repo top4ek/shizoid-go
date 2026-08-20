@@ -18,8 +18,6 @@ import (
 const (
 	Command     = "eightball"
 	Description = "Classic 8ball Yes or No questions"
-	HandlerType = bot.HandlerTypeMessageText
-	MatchType   = bot.MatchTypeCommand
 )
 
 func Handler(ctx context.Context, b *bot.Bot, update *models.Update) {

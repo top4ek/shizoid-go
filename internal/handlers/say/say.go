@@ -13,8 +13,6 @@ import (
 const (
 	Command     = "say"
 	Description = "Says something from bot's name"
-	HandlerType = bot.HandlerTypeMessageText
-	MatchType   = bot.MatchTypeCommand
 )
 
 func Handler(ctx context.Context, b *bot.Bot, update *models.Update) {

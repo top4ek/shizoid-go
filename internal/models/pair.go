@@ -8,14 +8,6 @@ import (
 	"strings"
 )
 
-// Pair represents the pairs table.
-type Pair struct {
-	ID       int64         `db:"id"`
-	ChatID   int64         `db:"chat_id"`
-	FirstID  sql.NullInt64 `db:"first_id"`
-	SecondID sql.NullInt64 `db:"second_id"`
-}
-
 type pairs struct{ db DBTX }
 
 type matchKind int

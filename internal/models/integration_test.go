@@ -106,10 +106,9 @@ func seedChat(t *testing.T, ctx context.Context) *Chat {
 	chat := &Chat{ID: nextChatID(), Kind: "supergroup", Locale: "ru"}
 	user := &User{ID: chat.ID + 500_000}
 	user.Username = sql.NullString{String: fmt.Sprintf("user%d", user.ID), Valid: true}
-	persisted, participation, err := testStore.Ingest.EnsureEntities(ctx, chat, user, false)
+	persisted, err := testStore.Ingest.EnsureEntities(ctx, chat, user, false)
 	require.NoError(t, err)
 	require.NotNil(t, persisted)
-	require.NotNil(t, participation)
 	return persisted
 }
 
@@ -123,13 +122,18 @@ func TestIntegrationWordsRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	tokens := []string{"альфа", "бета", "гамма", "альфа", ""}
 
-	require.NoError(t, s.Words.EnsureWords(ctx, tokens))
-	// idempotent second call
-	require.NoError(t, s.Words.EnsureWords(ctx, tokens))
+	first, err := s.Words.EnsureIDs(ctx, tokens)
+	require.NoError(t, err)
+	require.Len(t, first, 3)
+	// idempotent second call returns the same ids
+	second, err := s.Words.EnsureIDs(ctx, tokens)
+	require.NoError(t, err)
+	assert.Equal(t, first, second)
 
 	ids, err := s.Words.ToIDs(ctx, tokens)
 	require.NoError(t, err)
 	require.Len(t, ids, 3)
+	assert.Equal(t, first, ids)
 
 	var back []int64
 	for _, id := range ids {
@@ -224,9 +228,6 @@ func TestIntegrationMessagesByteWindows(t *testing.T) {
 	assert.Equal(t, userID, rows[0].UserID)
 	assert.True(t, rows[0].Username.Valid, "join with users must populate profile fields")
 
-	last, err := s.Messages.LastActivity(ctx, chat.ID)
-	require.NoError(t, err)
-	assert.True(t, last.Valid)
 }
 
 func TestIntegrationMessagesPruneByBytes(t *testing.T) {
@@ -260,16 +261,23 @@ func TestIntegrationIngestEnsureEntitiesIdempotent(t *testing.T) {
 	chat := &Chat{ID: nextChatID(), Kind: "supergroup", Locale: "ru"}
 	user := &User{ID: chat.ID + 500_000}
 
-	first, p1, err := s.Ingest.EnsureEntities(ctx, chat, user, false)
+	first, err := s.Ingest.EnsureEntities(ctx, chat, user, false)
 	require.NoError(t, err)
 	require.NotNil(t, first)
-	require.NotNil(t, p1)
 	assert.Equal(t, chat.ID, first.ID)
 
-	second, p2, err := s.Ingest.EnsureEntities(ctx, chat, user, false)
+	second, err := s.Ingest.EnsureEntities(ctx, chat, user, false)
 	require.NoError(t, err)
 	assert.Equal(t, first.ID, second.ID)
-	assert.Equal(t, p1.ID, p2.ID, "participation must be reused, not duplicated")
+
+	// Ensure no longer returns the row, so prove the participation was reused
+	// rather than duplicated through its observable effect: a score increment
+	// must land on exactly one row.
+	require.NoError(t, s.Participations.IncrScore(ctx, chat.ID, user.ID, 5))
+	top, err := s.Participations.TopByScore(ctx, chat.ID, 10)
+	require.NoError(t, err)
+	require.Len(t, top, 1, "participation must be reused, not duplicated")
+	assert.Equal(t, 5, top[0].Score)
 }
 
 func TestIntegrationWinnersLifecycle(t *testing.T) {

@@ -140,7 +140,7 @@ func Ingest(next bot.HandlerFunc) bot.HandlerFunc {
 		user := userModel(msg.From)
 		left := msg.LeftChatMember != nil && msg.LeftChatMember.ID == msg.From.ID
 
-		persistedChat, participation, err := app.Store().Ingest.EnsureEntities(ctx, chat, user, left)
+		persistedChat, err := app.Store().Ingest.EnsureEntities(ctx, chat, user, left)
 		if err != nil {
 			logger.Instance().Error("ingest ensure", zap.Error(err))
 			next(ctx, b, update)
@@ -148,7 +148,6 @@ func Ingest(next bot.HandlerFunc) bot.HandlerFunc {
 		}
 
 		ctx = app.WithChat(ctx, persistedChat)
-		ctx = app.WithParticipation(ctx, participation)
 		if isBotCommand(msg) {
 			ctx = app.WithSkipMessageHistory(ctx)
 		}

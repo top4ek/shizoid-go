@@ -49,9 +49,6 @@ func NewStore(pool *pgxpool.Pool) *Store {
 	}
 }
 
-// Pool exposes the underlying pool (e.g. for health checks).
-func (s *Store) Pool() *pgxpool.Pool { return s.pool }
-
 // DSN builds a PostgreSQL connection string. TLS is terminated at the load
 // balancer, hence sslmode=disable.
 func DSN(host, port, user, password, name string) string {

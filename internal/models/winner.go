@@ -4,17 +4,7 @@ import (
 	"context"
 
 	"github.com/jackc/pgx/v5"
-	"time"
 )
-
-// Winner represents the winners table.
-type Winner struct {
-	ID        int64     `db:"id"`
-	ChatID    int64     `db:"chat_id"`
-	UserID    int64     `db:"user_id"`
-	Date      time.Time `db:"date"`
-	CreatedAt time.Time `db:"created_at"`
-}
 
 type winners struct{ db DBTX }
 

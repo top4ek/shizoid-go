@@ -8,23 +8,6 @@ import (
 	"time"
 )
 
-// Participation represents the participations table (a user in a chat).
-type Participation struct {
-	ID                  int64          `db:"id"`
-	ChatID              int64          `db:"chat_id"`
-	UserID              int64          `db:"user_id"`
-	LeftAt              sql.NullTime   `db:"left_at"`
-	Score               int            `db:"score"`
-	ActiveAt            sql.NullTime   `db:"active_at"`
-	CaptchaSolvedAt     sql.NullTime   `db:"captcha_solved_at"`
-	CaptchaRequestedAt  sql.NullTime   `db:"captcha_requested_at"`
-	CaptchaCorrectEmoji sql.NullString `db:"captcha_correct_emoji"`
-	CaptchaMessageID    sql.NullInt64  `db:"captcha_message_id"`
-	GreetedAt           sql.NullTime   `db:"greeted_at"`
-	CreatedAt           time.Time      `db:"created_at"`
-	UpdatedAt           time.Time      `db:"updated_at"`
-}
-
 type participations struct{ db DBTX }
 
 // ScoreEntry is a single line of a chat leaderboard.
@@ -42,32 +25,16 @@ type CaptchaPending struct {
 	MessageID int
 }
 
-const participationColumns = `id, chat_id, user_id, left_at, score, active_at, captcha_solved_at,
-	captcha_requested_at, captcha_correct_emoji, captcha_message_id, greeted_at, created_at, updated_at`
-
-func scanParticipation(row interface{ Scan(...any) error }) (*Participation, error) {
-	p := &Participation{}
-	err := row.Scan(
-		&p.ID, &p.ChatID, &p.UserID, &p.LeftAt, &p.Score, &p.ActiveAt, &p.CaptchaSolvedAt,
-		&p.CaptchaRequestedAt, &p.CaptchaCorrectEmoji, &p.CaptchaMessageID, &p.GreetedAt,
-		&p.CreatedAt, &p.UpdatedAt,
-	)
-	if err != nil {
-		return nil, err
-	}
-	return p, nil
-}
-
-func (r participations) Ensure(ctx context.Context, chatID, userID int64, left bool) (*Participation, error) {
+func (r participations) Ensure(ctx context.Context, chatID, userID int64, left bool) error {
 	const q = `
 		INSERT INTO participations (chat_id, user_id, left_at, active_at, updated_at)
 		VALUES ($1, $2, CASE WHEN $3 THEN NOW() ELSE NULL END, NOW(), NOW())
 		ON CONFLICT (chat_id, user_id) DO UPDATE SET
 			left_at = CASE WHEN $3 THEN NOW() ELSE NULL END,
 			active_at = CASE WHEN $3 THEN participations.active_at ELSE NOW() END,
-			updated_at = NOW()
-		RETURNING ` + participationColumns
-	return scanParticipation(r.db.QueryRow(ctx, q, chatID, userID, left))
+			updated_at = NOW()`
+	_, err := r.db.Exec(ctx, q, chatID, userID, left)
+	return err
 }
 
 func (r participations) IncrScore(ctx context.Context, chatID, userID int64, delta int) error {
@@ -108,9 +75,6 @@ func (r participations) GetCaptchaPending(ctx context.Context, chatID, userID in
 	}
 	if err != nil {
 		return "", 0, false, err
-	}
-	if !emoji.Valid {
-		return "", 0, false, nil
 	}
 	id := 0
 	if msgID.Valid {
@@ -171,18 +135,6 @@ func (r participations) SetCaptchaDetails(ctx context.Context, chatID, userID in
 		WHERE chat_id = $1 AND user_id = $2
 		  AND captcha_requested_at IS NOT NULL
 		  AND captcha_solved_at IS NULL`,
-		chatID, userID, emoji, messageID)
-	return err
-}
-
-func (r participations) StartCaptcha(ctx context.Context, chatID, userID int64, emoji string, messageID int) error {
-	_, err := r.db.Exec(ctx, `
-		UPDATE participations SET
-			captcha_requested_at = NOW(),
-			captcha_correct_emoji = $3,
-			captcha_message_id = $4,
-			updated_at = NOW()
-		WHERE chat_id = $1 AND user_id = $2`,
 		chatID, userID, emoji, messageID)
 	return err
 }

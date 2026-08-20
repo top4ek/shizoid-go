@@ -19,8 +19,6 @@ import (
 const (
 	Command     = "greeting"
 	Description = "Set or clear the chat greeting"
-	HandlerType = bot.HandlerTypeMessageText
-	MatchType   = bot.MatchTypeCommand
 )
 
 func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {

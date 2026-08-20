@@ -21,8 +21,6 @@ import (
 const (
 	Command     = "winner"
 	Description = "Daily winner draw and stats"
-	HandlerType = bot.HandlerTypeMessageText
-	MatchType   = bot.MatchTypeCommand
 )
 
 func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {

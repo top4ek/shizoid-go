@@ -39,29 +39,6 @@ func FormatPlain(s string) string {
 	return bot.EscapeMarkdown(s)
 }
 
-// FormatTemplate escapes template literals while preserving %{placeholder} tokens.
-func FormatTemplate(s string) string {
-	var b strings.Builder
-	for {
-		idx := strings.Index(s, "%{")
-		if idx < 0 {
-			b.WriteString(bot.EscapeMarkdownUnescaped(s))
-			return b.String()
-		}
-		if idx > 0 {
-			b.WriteString(bot.EscapeMarkdownUnescaped(s[:idx]))
-		}
-		end := strings.Index(s[idx:], "}")
-		if end < 0 {
-			b.WriteString(bot.EscapeMarkdownUnescaped(s[idx:]))
-			return b.String()
-		}
-		end += idx
-		b.WriteString(s[idx : end+1])
-		s = s[end+1:]
-	}
-}
-
 func parseV2(s string, sanitize bool) (string, error) {
 	p := &mdParser{rs: []rune(s), sanitize: sanitize}
 	if err := p.parsePlain(); err != nil {

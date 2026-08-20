@@ -47,8 +47,6 @@ const (
 type command struct {
 	name        string
 	description string
-	handlerType bot.HandlerType
-	matchType   bot.MatchType
 	handler     bot.HandlerFunc
 
 	role         role
@@ -66,35 +64,35 @@ func commands() []command {
 // issues over; without it the command would sit in the menu doing nothing.
 func buildCommands(newsEnabled bool) []command {
 	cmds := []command{
-		{name: eightball.Command, description: eightball.Description, handlerType: eightball.HandlerType, matchType: eightball.MatchType, handler: eightball.Handler},
-		{name: gab.Command, description: gab.Description, handlerType: gab.HandlerType, matchType: gab.MatchType, handler: gab.Handler,
+		{name: eightball.Command, description: eightball.Description, handler: eightball.Handler},
+		{name: gab.Command, description: gab.Description, handler: gab.Handler,
 			role: roleAdmin, replyOnDeny: true, needsReady: true, needsEnabled: true},
-		{name: generation.Command, description: generation.Description, handlerType: generation.HandlerType, matchType: generation.MatchType, handler: generation.Handler,
+		{name: generation.Command, description: generation.Description, handler: generation.Handler,
 			needsEnabled: true},
-		{name: greeting.Command, description: greeting.Description, handlerType: greeting.HandlerType, matchType: greeting.MatchType, handler: greeting.Handler,
+		{name: greeting.Command, description: greeting.Description, handler: greeting.Handler,
 			role: roleAdmin, replyOnDeny: true, needsReady: true, needsEnabled: true},
-		{name: ids.Command, description: ids.Description, handlerType: ids.HandlerType, matchType: ids.MatchType, handler: ids.Handler},
-		{name: lang.Command, description: lang.Description, handlerType: lang.HandlerType, matchType: lang.MatchType, handler: lang.Handler,
+		{name: ids.Command, description: ids.Description, handler: ids.Handler},
+		{name: lang.Command, description: lang.Description, handler: lang.Handler,
 			needsReady: true, needsEnabled: true},
-		{name: me.Command, description: me.Description, handlerType: me.HandlerType, matchType: me.MatchType, handler: me.Handler},
-		{name: ping.Command, description: ping.Description, handlerType: ping.HandlerType, matchType: ping.MatchType, handler: ping.Handler},
-		{name: prompt.Command, description: prompt.Description, handlerType: prompt.HandlerType, matchType: prompt.MatchType, handler: prompt.Handler,
+		{name: me.Command, description: me.Description, handler: me.Handler},
+		{name: ping.Command, description: ping.Description, handler: ping.Handler},
+		{name: prompt.Command, description: prompt.Description, handler: prompt.Handler,
 			role: roleOwner, replyOnDeny: true, needsReady: true, needsEnabled: true},
-		{name: say.Command, description: say.Description, handlerType: say.HandlerType, matchType: say.MatchType, handler: say.Handler,
+		{name: say.Command, description: say.Description, handler: say.Handler,
 			role: roleOwner},
-		{name: start.Command, description: start.Description, handlerType: start.HandlerType, matchType: start.MatchType, handler: start.Handler,
+		{name: start.Command, description: start.Description, handler: start.Handler,
 			role: roleOwner, needsReady: true},
-		{name: status.Command, description: status.Description, handlerType: status.HandlerType, matchType: status.MatchType, handler: status.Handler,
+		{name: status.Command, description: status.Description, handler: status.Handler,
 			needsReady: true, needsEnabled: true},
-		{name: stop.Command, description: stop.Description, handlerType: stop.HandlerType, matchType: stop.MatchType, handler: stop.Handler,
+		{name: stop.Command, description: stop.Description, handler: stop.Handler,
 			role: roleOwner, needsReady: true},
-		{name: captcha.Command, description: captcha.Description, handlerType: captcha.HandlerType, matchType: captcha.MatchType, handler: captcha.Handler,
+		{name: captcha.Command, description: captcha.Description, handler: captcha.Handler,
 			role: roleAdmin, replyOnDeny: true, needsReady: true, needsEnabled: true},
-		{name: winner.Command, description: winner.Description, handlerType: winner.HandlerType, matchType: winner.MatchType, handler: winner.Handler,
+		{name: winner.Command, description: winner.Description, handler: winner.Handler,
 			needsReady: true, needsEnabled: true},
 	}
 	if newsEnabled {
-		cmds = append(cmds, command{name: news.Command, description: news.Description, handlerType: news.HandlerType, matchType: news.MatchType, handler: news.Handler,
+		cmds = append(cmds, command{name: news.Command, description: news.Description, handler: news.Handler,
 			needsReady: true, needsEnabled: true})
 	}
 	return cmds

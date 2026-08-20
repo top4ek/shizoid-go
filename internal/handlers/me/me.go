@@ -16,8 +16,6 @@ import (
 const (
 	Command     = "me"
 	Description = "Simulates /me like in XMPP or IRC"
-	HandlerType = bot.HandlerTypeMessageText
-	MatchType   = bot.MatchTypeCommand
 )
 
 func Handler(ctx context.Context, b *bot.Bot, update *models.Update) {

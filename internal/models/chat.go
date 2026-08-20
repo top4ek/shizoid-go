@@ -11,7 +11,6 @@ type Chat struct {
 	ID                 int64          `db:"id"`
 	Kind               string         `db:"kind"` // private, group, supergroup, channel
 	Random             int16          `db:"random"`
-	Eightball          bool           `db:"eightball"`
 	Greeting           bool           `db:"greeting"`
 	Winner             sql.NullString `db:"winner"`
 	Locale             string         `db:"locale"`
@@ -22,12 +21,10 @@ type Chat struct {
 	Username           sql.NullString `db:"username"`
 	ActiveAt           sql.NullTime   `db:"active_at"`
 	CaptchaEnabledAt   sql.NullTime   `db:"captcha_enabled_at"`
-	CaptchaGreeting    sql.NullString `db:"captcha_greeting"`
 	SystemPrompt       sql.NullString `db:"system_prompt"`
 	Memory             sql.NullString `db:"memory"`
 	MemorySummarizedAt sql.NullTime   `db:"memory_summarized_at"`
 	News               sql.NullString `db:"news"`
-	CreatedAt          time.Time      `db:"created_at"`
 }
 
 type chats struct{ db DBTX }
@@ -54,18 +51,16 @@ func (c *Chat) CaptchaEnabled() bool {
 	return c.CaptchaEnabledAt.Valid
 }
 
-const chatColumns = `id, kind, random, eightball, greeting, winner, locale, generation_mode,
+const chatColumns = `id, kind, random, greeting, winner, locale, generation_mode,
 	title, first_name, last_name, username, active_at,
-	captcha_enabled_at, captcha_greeting, system_prompt, memory,
-	memory_summarized_at, news, created_at`
+	captcha_enabled_at, system_prompt, memory, memory_summarized_at, news`
 
 func scanChat(row interface{ Scan(...any) error }) (*Chat, error) {
 	c := &Chat{}
 	err := row.Scan(
-		&c.ID, &c.Kind, &c.Random, &c.Eightball, &c.Greeting, &c.Winner, &c.Locale, &c.GenerationMode,
+		&c.ID, &c.Kind, &c.Random, &c.Greeting, &c.Winner, &c.Locale, &c.GenerationMode,
 		&c.Title, &c.FirstName, &c.LastName, &c.Username, &c.ActiveAt,
-		&c.CaptchaEnabledAt, &c.CaptchaGreeting, &c.SystemPrompt, &c.Memory,
-		&c.MemorySummarizedAt, &c.News, &c.CreatedAt,
+		&c.CaptchaEnabledAt, &c.SystemPrompt, &c.Memory, &c.MemorySummarizedAt, &c.News,
 	)
 	if err != nil {
 		return nil, err
@@ -101,11 +96,6 @@ func (r chats) Enable(ctx context.Context, id int64) error {
 
 func (r chats) Disable(ctx context.Context, id int64) error {
 	_, err := r.db.Exec(ctx, `UPDATE chats SET active_at = NULL WHERE id = $1`, id)
-	return err
-}
-
-func (r chats) Touch(ctx context.Context, id int64) error {
-	_, err := r.db.Exec(ctx, `UPDATE chats SET active_at = NOW() WHERE id = $1`, id)
 	return err
 }
 

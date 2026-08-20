@@ -74,16 +74,6 @@ type chatMessage struct {
 	Content []contentPart `json:"content"`
 }
 
-// Reply builds a chat completion from a system prompt and the current user
-// message, walking the reply chain until a provider answers.
-func (c *Client) Reply(ctx context.Context, system, user string) (string, error) {
-	history := []HistoryMessage{}
-	if user = strings.TrimSpace(user); user != "" {
-		history = append(history, HistoryMessage{Role: "user", Text: user})
-	}
-	return c.ReplyWithHistory(ctx, system, history)
-}
-
 // ReplyWithHistory builds a chat completion from a system prompt and ordered
 // conversation history, walking the reply chain until a provider answers.
 func (c *Client) ReplyWithHistory(ctx context.Context, system string, history []HistoryMessage) (string, error) {
@@ -103,8 +93,10 @@ func (c *Client) ReplyWithHistory(ctx context.Context, system string, history []
 }
 
 type chatRequest struct {
-	Model              string         `json:"model"`
-	Messages           []chatMessage  `json:"messages"`
+	Model    string        `json:"model"`
+	Messages []chatMessage `json:"messages"`
+	// Never set in Go, but deliberately without omitempty: every request carries
+	// an explicit "stream":false rather than relying on the provider default.
 	Stream             bool           `json:"stream"`
 	Temperature        *float64       `json:"temperature,omitempty"`
 	TopP               *float64       `json:"top_p,omitempty"`

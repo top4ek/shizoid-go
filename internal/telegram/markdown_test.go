@@ -37,12 +37,6 @@ func TestSanitizeV2_BrokenBoldFallsBack(t *testing.T) {
 	assert.NoError(t, ValidateV2(got))
 }
 
-func TestFormatTemplate(t *testing.T) {
-	got := FormatTemplate("Hey %{user}, wait.")
-	assert.Contains(t, got, "%{user}")
-	assert.Contains(t, got, `wait\.`)
-}
-
 func TestFormatPlain(t *testing.T) {
 	assert.Equal(t, bot.EscapeMarkdown("(private)"), FormatPlain("(private)"))
 }
