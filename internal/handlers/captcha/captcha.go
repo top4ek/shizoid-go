@@ -58,39 +58,13 @@ func OnMemberJoined(ctx context.Context, b *bot.Bot, chatID int64, member tgmode
 	}
 }
 
+// challengeMember posts a captcha for one member who just joined, unless they
+// have already solved one or another delivery of the same join already claimed
+// the challenge.
 func challengeMember(ctx context.Context, b *bot.Bot, chatID int64, lang string, member tgmodels.User) error {
-	global, err := app.Store().Users.CaptchaSolved(ctx, member.ID)
-	if err != nil {
+	claimed, err := claimChallenge(ctx, chatID, member.ID)
+	if err != nil || !claimed {
 		return err
-	}
-	if global {
-		logger.Instance().Debug("captcha skip: global_solved",
-			zap.Int64("chat_id", chatID),
-			zap.Int64("user_id", member.ID),
-		)
-		return app.Store().Participations.MarkCaptchaSolved(ctx, chatID, member.ID)
-	}
-	solved, err := app.Store().Participations.CaptchaSolved(ctx, chatID, member.ID)
-	if err != nil {
-		return err
-	}
-	if solved {
-		logger.Instance().Debug("captcha skip: chat_solved",
-			zap.Int64("chat_id", chatID),
-			zap.Int64("user_id", member.ID),
-		)
-		return nil
-	}
-	claimed, err := app.Store().Participations.TryClaimCaptcha(ctx, chatID, member.ID)
-	if err != nil {
-		return err
-	}
-	if !claimed {
-		logger.Instance().Debug("captcha skip: duplicate",
-			zap.Int64("chat_id", chatID),
-			zap.Int64("user_id", member.ID),
-		)
-		return nil
 	}
 
 	logger.Instance().Debug("captcha challenge: start",
@@ -98,32 +72,10 @@ func challengeMember(ctx context.Context, b *bot.Bot, chatID int64, lang string,
 		zap.Int64("user_id", member.ID),
 	)
 
-	correct, buttons, err := buildChallenge(lang)
+	correct, sent, err := sendChallenge(ctx, b, chatID, lang, member)
 	if err != nil {
-		_ = app.Store().Participations.ClearCaptcha(ctx, chatID, member.ID)
-		return err
-	}
-
-	telegram.Mute(ctx, b, chatID, member.ID)
-
-	text := locale.T(lang, "captcha.message",
-		"user", formatUserLink(member),
-		"word", telegram.FormatPlain(correct.Word),
-	)
-	row := make([]tgmodels.InlineKeyboardButton, len(buttons))
-	for i, sym := range buttons {
-		row[i] = tgmodels.InlineKeyboardButton{
-			Text:         sym.Emoji,
-			CallbackData: callbackData(member.ID, sym.Emoji),
-		}
-	}
-	kb := &tgmodels.InlineKeyboardMarkup{InlineKeyboard: [][]tgmodels.InlineKeyboardButton{row}}
-
-	sent, err := telegram.SendToChat(ctx, b, chatID, text, telegram.ChatMessageOpts{
-		ReplyMarkup:        kb,
-		DisableLinkPreview: true,
-	})
-	if err != nil {
+		// The claim above is what stops a second challenge; release it so a
+		// later join attempt is not silently swallowed.
 		_ = app.Store().Participations.ClearCaptcha(ctx, chatID, member.ID)
 		return err
 	}
@@ -133,7 +85,6 @@ func challengeMember(ctx context.Context, b *bot.Bot, chatID int64, lang string,
 		zap.Int64("user_id", member.ID),
 		zap.Int("message_id", sent.ID),
 	)
-
 	if err := app.Store().Participations.SetCaptchaDetails(ctx, chatID, member.ID, correct.Emoji, sent.ID); err != nil {
 		return err
 	}
@@ -142,6 +93,73 @@ func challengeMember(ctx context.Context, b *bot.Bot, chatID int64, lang string,
 		zap.Int64("user_id", member.ID),
 	)
 	return nil
+}
+
+// claimChallenge reports whether this caller should post the challenge: false
+// when the member already solved a captcha (globally or in this chat) or when a
+// concurrent join already claimed it.
+func claimChallenge(ctx context.Context, chatID, userID int64) (bool, error) {
+	skip := func(reason string) {
+		logger.Instance().Debug("captcha skip: "+reason,
+			zap.Int64("chat_id", chatID),
+			zap.Int64("user_id", userID),
+		)
+	}
+
+	global, err := app.Store().Users.CaptchaSolved(ctx, userID)
+	if err != nil {
+		return false, err
+	}
+	if global {
+		skip("global_solved")
+		return false, app.Store().Participations.MarkCaptchaSolved(ctx, chatID, userID)
+	}
+
+	solved, err := app.Store().Participations.CaptchaSolved(ctx, chatID, userID)
+	if err != nil {
+		return false, err
+	}
+	if solved {
+		skip("chat_solved")
+		return false, nil
+	}
+
+	claimed, err := app.Store().Participations.TryClaimCaptcha(ctx, chatID, userID)
+	if err != nil {
+		return false, err
+	}
+	if !claimed {
+		skip("duplicate")
+	}
+	return claimed, nil
+}
+
+// sendChallenge mutes the member and posts the emoji keyboard, returning the
+// expected answer and the message carrying it.
+func sendChallenge(ctx context.Context, b *bot.Bot, chatID int64, lang string, member tgmodels.User) (locale.Symbol, *tgmodels.Message, error) {
+	correct, buttons, err := buildChallenge(lang)
+	if err != nil {
+		return correct, nil, err
+	}
+
+	telegram.Mute(ctx, b, chatID, member.ID)
+
+	row := make([]tgmodels.InlineKeyboardButton, len(buttons))
+	for i, sym := range buttons {
+		row[i] = tgmodels.InlineKeyboardButton{
+			Text:         sym.Emoji,
+			CallbackData: callbackData(member.ID, sym.Emoji),
+		}
+	}
+	text := locale.T(lang, "captcha.message",
+		"user", formatUserLink(member),
+		"word", telegram.FormatPlain(correct.Word),
+	)
+	sent, err := telegram.SendToChat(ctx, b, chatID, text, telegram.ChatMessageOpts{
+		ReplyMarkup:        &tgmodels.InlineKeyboardMarkup{InlineKeyboard: [][]tgmodels.InlineKeyboardButton{row}},
+		DisableLinkPreview: true,
+	})
+	return correct, sent, err
 }
 
 // Callback verifies a captcha button press and unmutes the solver.
@@ -159,8 +177,9 @@ func Callback(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 
 	chatID := cq.Message.Message.Chat.ID
 
+	// Anyone can see the buttons; only the challenged member's press counts.
 	if cq.From.ID != targetID {
-		_, _ = b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{CallbackQueryID: cq.ID})
+		answerSilently(ctx, b, cq)
 		return
 	}
 
@@ -169,47 +188,38 @@ func Callback(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 	correctEmoji, messageID, pending, err := app.Store().Participations.GetCaptchaPending(ctx, chatID, targetID)
 	if err != nil {
 		logger.Instance().Error("captcha get pending", zap.Error(err))
-		_, _ = b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
-			CallbackQueryID: cq.ID,
-			Text:            locale.T(lang, "common.error"),
-			ShowAlert:       true,
-		})
+		answerError(ctx, b, cq, lang)
 		return
 	}
 	if !pending {
-		_, _ = b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{CallbackQueryID: cq.ID})
+		answerSilently(ctx, b, cq)
 		return
 	}
 
 	if pressedEmoji != correctEmoji {
-		_, _ = b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
-			CallbackQueryID: cq.ID,
-			Text:            locale.T(lang, "captcha.wrong"),
-			ShowAlert:       true,
-		})
+		answerAlert(ctx, b, cq, locale.T(lang, "captcha.wrong"))
 		failCaptcha(ctx, b, chatID, targetID, messageID)
 		return
 	}
 
+	acceptSolution(ctx, b, cq, chatID, targetID, lang)
+}
+
+// acceptSolution records the solve, unmutes the member and clears the challenge
+// message.
+func acceptSolution(ctx context.Context, b *bot.Bot, cq *tgmodels.CallbackQuery, chatID, targetID int64, lang string) {
 	user := models.UserFromTelegram(&cq.From)
 	if err := app.Store().Ingest.EnsureMember(ctx, chatID, user); err != nil {
 		logger.Instance().Error("captcha ensure member", zap.Error(err))
-		_, _ = b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
-			CallbackQueryID: cq.ID,
-			Text:            locale.T(lang, "common.error"),
-			ShowAlert:       true,
-		})
+		answerError(ctx, b, cq, lang)
 		return
 	}
 	if err := app.Store().Participations.MarkCaptchaSolved(ctx, chatID, targetID); err != nil {
 		logger.Instance().Error("captcha mark participation", zap.Error(err))
-		_, _ = b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
-			CallbackQueryID: cq.ID,
-			Text:            locale.T(lang, "common.error"),
-			ShowAlert:       true,
-		})
+		answerError(ctx, b, cq, lang)
 		return
 	}
+	// Best-effort: the chat-level solve above is what unblocks the member.
 	if err := app.Store().Users.MarkCaptchaSolved(ctx, targetID); err != nil {
 		logger.Instance().Error("captcha mark user", zap.Error(err))
 	}
@@ -224,6 +234,23 @@ func Callback(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 		zap.Int64("chat_id", chatID),
 		zap.Int64("user_id", targetID),
 	)
+}
+
+// answerSilently dismisses the button's spinner without showing anything.
+func answerSilently(ctx context.Context, b *bot.Bot, cq *tgmodels.CallbackQuery) {
+	_, _ = b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{CallbackQueryID: cq.ID})
+}
+
+func answerAlert(ctx context.Context, b *bot.Bot, cq *tgmodels.CallbackQuery, text string) {
+	_, _ = b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
+		CallbackQueryID: cq.ID,
+		Text:            text,
+		ShowAlert:       true,
+	})
+}
+
+func answerError(ctx context.Context, b *bot.Bot, cq *tgmodels.CallbackQuery, lang string) {
+	answerAlert(ctx, b, cq, locale.T(lang, "common.error"))
 }
 
 // ExpirePending kicks users with captcha challenges past the timeout.

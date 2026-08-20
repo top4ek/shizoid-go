@@ -306,51 +306,30 @@ func (c *Client) complete(ctx context.Context, chain []Provider, messages []chat
 	return "", lastErr
 }
 
+// call performs one completion against a provider: reserve budget, check for a
+// free slot, build and send the request, then parse the answer.
 func (c *Client) call(ctx context.Context, p Provider, messages []chatMessage) (out string, err error) {
-	if c.ledger != nil {
-		if !c.ledger.reserve(p.Name, p.DailyLimit) {
-			logger.Instance().Debug("neural daily limit exceeded",
-				zap.String("provider", p.Name),
-				zap.Int("limit", p.DailyLimit),
-			)
-			return "", fmt.Errorf("neural: %s: daily limit exceeded", p.Name)
-		}
-		// Only successful non-empty completions consume the daily budget.
-		defer func() {
-			if err != nil || strings.TrimSpace(out) == "" {
-				c.ledger.release(p.Name, p.DailyLimit)
-			}
-		}()
+	release, err := c.reserve(p)
+	if err != nil {
+		return "", err
 	}
+	// Only successful non-empty completions consume the daily budget.
+	defer func() {
+		if err != nil || strings.TrimSpace(out) == "" {
+			release()
+		}
+	}()
+
 	if err := c.checkSlots(ctx, p); err != nil {
 		return "", err
 	}
 
-	timeout := time.Duration(p.TimeoutSeconds) * time.Second
-	if timeout <= 0 {
-		timeout = 30 * time.Second
-	}
-	reqCtx, cancel := context.WithTimeout(ctx, timeout)
+	reqCtx, cancel := context.WithTimeout(ctx, requestTimeout(p))
 	defer cancel()
 
-	reqBody := chatRequest{
-		Model:              p.Model,
-		Messages:           messages,
-		ChatTemplateKwargs: map[string]any{"enable_thinking": false},
-	}
-	applySampling(p, &reqBody)
-	body, err := json.Marshal(reqBody)
+	req, body, err := buildRequest(reqCtx, p, messages)
 	if err != nil {
 		return "", err
-	}
-	url := strings.TrimRight(p.BaseURL, "/") + "/chat/completions"
-	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, url, bytes.NewReader(body))
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	if p.APIKey != "" {
-		req.Header.Set("Authorization", "Bearer "+p.APIKey)
 	}
 
 	log := logger.Instance()
@@ -362,7 +341,7 @@ func (c *Client) call(ctx context.Context, p Provider, messages []chatMessage) (
 	// Payload carries user message text: debug-only and truncated.
 	log.Debug("neural request payload",
 		zap.String("provider", p.Name),
-		zap.String("url", url),
+		zap.String("url", req.URL.String()),
 		zap.String("body", logger.TruncateLogText(string(body))),
 	)
 	start := time.Now()
@@ -373,12 +352,81 @@ func (c *Client) call(ctx context.Context, p Provider, messages []chatMessage) (
 	}
 	defer resp.Body.Close()
 
+	raw, err := parseResponse(p, resp, start)
+	if err != nil {
+		return "", err
+	}
+	out = stripThinking(raw)
+	log.Info("neural response",
+		zap.String("provider", p.Name),
+		zap.String("model", p.Model),
+		zap.Int("status", resp.StatusCode),
+		zap.Duration("duration", time.Since(start)),
+		zap.Int("text_len", len(out)),
+		zap.Int("text_runes", utf8.RuneCountInString(out)),
+	)
+	return out, nil
+}
+
+// reserve takes a slot from the provider's daily budget and returns the function
+// that gives it back. The returned release is always safe to call.
+func (c *Client) reserve(p Provider) (release func(), err error) {
+	if c.ledger == nil {
+		return func() {}, nil
+	}
+	if !c.ledger.reserve(p.Name, p.DailyLimit) {
+		logger.Instance().Debug("neural daily limit exceeded",
+			zap.String("provider", p.Name),
+			zap.Int("limit", p.DailyLimit),
+		)
+		return nil, fmt.Errorf("neural: %s: daily limit exceeded", p.Name)
+	}
+	return func() { c.ledger.release(p.Name, p.DailyLimit) }, nil
+}
+
+func requestTimeout(p Provider) time.Duration {
+	if p.TimeoutSeconds <= 0 {
+		return 30 * time.Second
+	}
+	return time.Duration(p.TimeoutSeconds) * time.Second
+}
+
+// buildRequest marshals the chat completion payload and returns the request
+// alongside the raw body, which the caller logs.
+func buildRequest(ctx context.Context, p Provider, messages []chatMessage) (*http.Request, []byte, error) {
+	reqBody := chatRequest{
+		Model:              p.Model,
+		Messages:           messages,
+		ChatTemplateKwargs: map[string]any{"enable_thinking": false},
+	}
+	applySampling(p, &reqBody)
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, nil, err
+	}
+	url := strings.TrimRight(p.BaseURL, "/") + "/chat/completions"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return nil, nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if p.APIKey != "" {
+		req.Header.Set("Authorization", "Bearer "+p.APIKey)
+	}
+	return req, body, nil
+}
+
+// parseResponse turns a completion response into its message text, treating a
+// non-2xx status or an empty choices list as a provider failure so the caller
+// falls through to the next provider in the chain.
+func parseResponse(p Provider, resp *http.Response, start time.Time) (string, error) {
+	log := logger.Instance()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		log.Info("neural error",
 			zap.String("provider", p.Name),
 			zap.String("model", p.Model),
-			zap.String("url", url),
+			zap.String("url", resp.Request.URL.String()),
 			zap.Int("status", resp.StatusCode),
 			zap.Duration("duration", time.Since(start)),
 			zap.String("response_body", strings.TrimSpace(string(respBody))),
@@ -402,16 +450,7 @@ func (c *Client) call(ctx context.Context, p Provider, messages []chatMessage) (
 		zap.String("body", logger.TruncateLogText(string(respBody))),
 		zap.String("text", logger.TruncateLogText(raw)),
 	)
-	out = stripThinking(raw)
-	log.Info("neural response",
-		zap.String("provider", p.Name),
-		zap.String("model", p.Model),
-		zap.Int("status", resp.StatusCode),
-		zap.Duration("duration", time.Since(start)),
-		zap.Int("text_len", len(out)),
-		zap.Int("text_runes", utf8.RuneCountInString(out)),
-	)
-	return out, nil
+	return raw, nil
 }
 
 // checkSlots asks llama.cpp whether a free inference slot exists. When all slots

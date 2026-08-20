@@ -29,46 +29,30 @@ func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 	if chat == nil {
 		return
 	}
+	// Reading the mode is public; setting it is admin-only, which is why this
+	// command registers as roleEveryone and checks below instead of in gate.
 	payload := normalizedPayload(update)
-	modes := modeList()
-	switch action, mode := classifyGenerationAction(payload); action {
-	case generationShow:
-		telegram.Reply(ctx, b, update, locale.T(lang, "generation.current", "mode", chat.GenerationMode.String()))
-	case generationUnknown:
-		telegram.Reply(ctx, b, update, locale.T(lang, "generation.unknown", "list", modes))
-	case generationSet:
-		if !utils.RequireChatAdmin(ctx, b, update, lang) {
-			return
-		}
-		if err := app.Store().Chats.SetGenerationMode(ctx, chat.ID, mode); err != nil {
-			logger.Instance().Error("set generation mode", zap.Error(err))
-			return
-		}
-		telegram.Reply(ctx, b, update, locale.T(lang, "generation.set", "mode", mode.String()))
-	}
-}
-
-type generationAction int
-
-const (
-	generationShow generationAction = iota
-	generationUnknown
-	generationSet
-)
-
-func normalizedPayload(update *tgmodels.Update) string {
-	return strings.ToLower(strings.TrimSpace(utils.ExtractCommandPayloadText(update)))
-}
-
-func classifyGenerationAction(payload string) (generationAction, models.GenerationMode) {
 	if payload == "" {
-		return generationShow, 0
+		telegram.Reply(ctx, b, update, locale.T(lang, "generation.current", "mode", chat.GenerationMode.String()))
+		return
 	}
 	mode, ok := models.ParseGenerationMode(payload)
 	if !ok {
-		return generationUnknown, 0
+		telegram.Reply(ctx, b, update, locale.T(lang, "generation.unknown", "list", modeList()))
+		return
 	}
-	return generationSet, mode
+	if !utils.RequireChatAdmin(ctx, b, update, lang) {
+		return
+	}
+	if err := app.Store().Chats.SetGenerationMode(ctx, chat.ID, mode); err != nil {
+		logger.Instance().Error("set generation mode", zap.Error(err))
+		return
+	}
+	telegram.Reply(ctx, b, update, locale.T(lang, "generation.set", "mode", mode.String()))
+}
+
+func normalizedPayload(update *tgmodels.Update) string {
+	return strings.ToLower(strings.TrimSpace(utils.ExtractCommandPayloadText(update)))
 }
 
 func modeList() string {

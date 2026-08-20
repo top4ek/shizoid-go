@@ -16,17 +16,17 @@ func TestNormalizedPayload(t *testing.T) {
 	assert.Equal(t, "classic", normalizedPayload(update))
 }
 
-func TestClassifyGenerationAction(t *testing.T) {
-	action, _ := classifyGenerationAction("")
-	assert.Equal(t, generationShow, action)
-
-	action, mode := classifyGenerationAction("magic")
-	assert.Equal(t, generationUnknown, action)
-	assert.Equal(t, models.GenerationMode(0), mode)
-
-	action, mode = classifyGenerationAction("neural")
-	assert.Equal(t, generationSet, action)
+// normalizedPayload feeds models.ParseGenerationMode directly, so the payload
+// forms the handler accepts are pinned here.
+func TestNormalizedPayloadFeedsParseGenerationMode(t *testing.T) {
+	mode, ok := models.ParseGenerationMode(normalizedPayload(
+		&tgmodels.Update{Message: &tgmodels.Message{Text: "/generation  Neural "}}))
+	assert.True(t, ok)
 	assert.Equal(t, models.GenerationModeNeural, mode)
+
+	_, ok = models.ParseGenerationMode(normalizedPayload(
+		&tgmodels.Update{Message: &tgmodels.Message{Text: "/generation magic"}}))
+	assert.False(t, ok)
 }
 
 func TestModeList(t *testing.T) {

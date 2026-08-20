@@ -90,11 +90,8 @@ func handleMembersJoined(ctx context.Context, b *bot.Bot, chatID int64, users []
 		zap.Int("members_count", len(users)),
 	)
 
-	challenged := false
-	needGreeting := false
-	var greetedUsers []int64
-	for i := range users {
-		member := users[i]
+	humans := make([]tgmodels.User, 0, len(users))
+	for _, member := range users {
 		if member.IsBot {
 			logger.Instance().Debug("captcha skip: is_bot",
 				zap.Int64("chat_id", chatID),
@@ -102,38 +99,58 @@ func handleMembersJoined(ctx context.Context, b *bot.Bot, chatID int64, users []
 			)
 			continue
 		}
-		if chat.CaptchaEnabled() {
-			challenged = true
+		humans = append(humans, member)
+	}
+
+	if chat.CaptchaEnabled() {
+		if len(humans) == 0 {
+			logger.Instance().Debug("join skip: all members are bots", zap.Int64("chat_id", chatID))
+		}
+		for _, member := range humans {
 			captcha.OnMemberJoined(ctx, b, chatID, member)
 		}
-		if chat.Greeting {
-			claimed, err := greeting.OnMemberJoined(ctx, chatID, member)
-			if err != nil {
-				logger.Instance().Error("greeting claim", zap.Int64("user_id", member.ID), zap.Error(err))
-				continue
-			}
-			if claimed {
-				needGreeting = true
-				greetedUsers = append(greetedUsers, member.ID)
-			}
-		}
-	}
-	if chat.CaptchaEnabled() && !challenged {
-		logger.Instance().Debug("join skip: all members are bots", zap.Int64("chat_id", chatID))
-	} else if !chat.CaptchaEnabled() {
+	} else {
 		logger.Instance().Debug("join skip: captcha disabled", zap.Int64("chat_id", chatID))
 	}
-	if needGreeting {
-		sent, err := greeting.Send(ctx, b, chatID)
-		if err != nil || !sent {
-			if err != nil {
-				logger.Instance().Error("greeting send", zap.Int64("chat_id", chatID), zap.Error(err))
-			}
-			for _, uid := range greetedUsers {
-				if clearErr := app.Store().Participations.ClearGreeting(ctx, chatID, uid); clearErr != nil {
-					logger.Instance().Error("greeting clear", zap.Int64("user_id", uid), zap.Error(clearErr))
-				}
-			}
+
+	if chat.Greeting {
+		sendGreetingOrRollback(ctx, b, chatID, claimGreetings(ctx, chatID, humans))
+	}
+}
+
+// claimGreetings returns the members this delivery of the join won the greeting
+// for; a concurrent delivery claiming first is the normal case, not an error.
+func claimGreetings(ctx context.Context, chatID int64, humans []tgmodels.User) []int64 {
+	var claimedIDs []int64
+	for _, member := range humans {
+		claimed, err := greeting.OnMemberJoined(ctx, chatID, member)
+		if err != nil {
+			logger.Instance().Error("greeting claim", zap.Int64("user_id", member.ID), zap.Error(err))
+			continue
+		}
+		if claimed {
+			claimedIDs = append(claimedIDs, member.ID)
+		}
+	}
+	return claimedIDs
+}
+
+// sendGreetingOrRollback posts one greeting for the whole batch, releasing every
+// claim if nothing went out so a later join can greet these members instead.
+func sendGreetingOrRollback(ctx context.Context, b *bot.Bot, chatID int64, claimedIDs []int64) {
+	if len(claimedIDs) == 0 {
+		return
+	}
+	sent, err := greeting.Send(ctx, b, chatID)
+	if err != nil {
+		logger.Instance().Error("greeting send", zap.Int64("chat_id", chatID), zap.Error(err))
+	}
+	if sent && err == nil {
+		return
+	}
+	for _, uid := range claimedIDs {
+		if clearErr := app.Store().Participations.ClearGreeting(ctx, chatID, uid); clearErr != nil {
+			logger.Instance().Error("greeting clear", zap.Int64("user_id", uid), zap.Error(clearErr))
 		}
 	}
 }
