@@ -238,7 +238,7 @@ func (p *mdParser) parseLink() (string, bool) {
 	return "", false
 }
 
-// A link's two halves are checked the same way: walk the runes honouring
+// A link's two halves are checked the same way: walk the runes honoring
 // backslash escapes and reject (or escape) the one delimiter that would end the
 // half early - ] inside the text, ) inside the URL.
 
