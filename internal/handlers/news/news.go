@@ -3,7 +3,6 @@ package news
 import (
 	"context"
 	"database/sql"
-	"strings"
 
 	"github.com/go-telegram/bot"
 	tgmodels "github.com/go-telegram/bot/models"
@@ -28,12 +27,11 @@ func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 		return
 	}
 	lang := app.Locale(ctx)
-	payload := strings.TrimSpace(utils.ExtractCommandPayloadText(update))
-	first, rest, _ := strings.Cut(payload, " ")
+	verb, rest := utils.CutSubcommand(update)
 
-	switch strings.ToLower(first) {
+	switch verb {
 	case "enable":
-		enable(ctx, b, update, chat.ID, strings.TrimSpace(rest), lang)
+		enable(ctx, b, update, chat.ID, rest, lang)
 	case "disable":
 		disable(ctx, b, update, chat.ID, lang)
 	case "":
@@ -44,8 +42,7 @@ func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 }
 
 func enable(ctx context.Context, b *bot.Bot, update *tgmodels.Update, chatID int64, style, lang string) {
-	if !utils.IsChatAdmin(ctx, b, chatID, update.Message.From.ID) {
-		telegram.Reply(ctx, b, update, locale.Random(lang, "nok"))
+	if !utils.RequireChatAdmin(ctx, b, update, lang) {
 		return
 	}
 	if style == "" {
@@ -59,8 +56,7 @@ func enable(ctx context.Context, b *bot.Bot, update *tgmodels.Update, chatID int
 }
 
 func disable(ctx context.Context, b *bot.Bot, update *tgmodels.Update, chatID int64, lang string) {
-	if !utils.IsChatAdmin(ctx, b, chatID, update.Message.From.ID) {
-		telegram.Reply(ctx, b, update, locale.Random(lang, "nok"))
+	if !utils.RequireChatAdmin(ctx, b, update, lang) {
 		return
 	}
 	if err := app.Store().Chats.SetNews(ctx, chatID, sql.NullString{}); err != nil {

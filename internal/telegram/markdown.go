@@ -219,8 +219,8 @@ func (p *mdParser) parseLink() (string, bool) {
 				if p.rs[p.i] == ')' {
 					url := string(p.rs[urlStart:p.i])
 					p.i++
-					text = sanitizeLinkPart(text, validateLinkText, sanitizeLinkText, p.sanitize)
-					url = sanitizeLinkPart(url, validateLinkURL, sanitizeLinkURL, p.sanitize)
+					text = linkPart(text, ']', "link text", p.sanitize)
+					url = linkPart(url, ')', "link url", p.sanitize)
 					if text == "" || url == "" {
 						p.i = start
 						return "", false
@@ -238,17 +238,25 @@ func (p *mdParser) parseLink() (string, bool) {
 	return "", false
 }
 
-func sanitizeLinkPart(s string, validate func(string) error, sanitize func(string) string, doSanitize bool) string {
-	if err := validate(s); err != nil {
-		if !doSanitize {
-			return ""
-		}
-		return sanitize(s)
+// A link's two halves are checked the same way: walk the runes honouring
+// backslash escapes and reject (or escape) the one delimiter that would end the
+// half early - ] inside the text, ) inside the URL.
+
+// linkPart repairs one half of a link: valid input passes through, invalid
+// input is escaped when sanitizing and dropped when validating.
+func linkPart(s string, delim rune, what string, sanitize bool) string {
+	if err := validateUnescaped(s, delim, what); err == nil {
+		return s
 	}
-	return s
+	if !sanitize {
+		return ""
+	}
+	return escapeUnescaped(s, delim)
 }
 
-func validateLinkText(s string) error {
+// validateUnescaped reports an unescaped delim, or a trailing backslash that
+// escapes nothing.
+func validateUnescaped(s string, delim rune, what string) error {
 	rs := []rune(s)
 	for i := 0; i < len(rs); {
 		if rs[i] == '\\' {
@@ -258,33 +266,17 @@ func validateLinkText(s string) error {
 			i += 2
 			continue
 		}
-		if rs[i] == ']' {
-			return fmt.Errorf("%w: unescaped ] in link text", errInvalidMarkdown)
+		if rs[i] == delim {
+			return fmt.Errorf("%w: unescaped %c in %s", errInvalidMarkdown, delim, what)
 		}
 		i++
 	}
 	return nil
 }
 
-func validateLinkURL(s string) error {
-	rs := []rune(s)
-	for i := 0; i < len(rs); {
-		if rs[i] == '\\' {
-			if i+1 >= len(rs) {
-				return errInvalidMarkdown
-			}
-			i += 2
-			continue
-		}
-		if rs[i] == ')' {
-			return fmt.Errorf("%w: unescaped ) in link url", errInvalidMarkdown)
-		}
-		i++
-	}
-	return nil
-}
-
-func sanitizeLinkText(s string) string {
+// escapeUnescaped backslash-escapes every unescaped delim, leaving existing
+// escape pairs alone.
+func escapeUnescaped(s string, delim rune) string {
 	var b strings.Builder
 	rs := []rune(s)
 	for i := 0; i < len(rs); {
@@ -294,31 +286,8 @@ func sanitizeLinkText(s string) string {
 			i += 2
 			continue
 		}
-		if rs[i] == ']' {
-			b.WriteString(`\]`)
-			i++
-			continue
-		}
-		b.WriteRune(rs[i])
-		i++
-	}
-	return b.String()
-}
-
-func sanitizeLinkURL(s string) string {
-	var b strings.Builder
-	rs := []rune(s)
-	for i := 0; i < len(rs); {
-		if rs[i] == '\\' && i+1 < len(rs) {
-			b.WriteRune(rs[i])
-			b.WriteRune(rs[i+1])
-			i += 2
-			continue
-		}
-		if rs[i] == ')' {
-			b.WriteString(`\)`)
-			i++
-			continue
+		if rs[i] == delim {
+			b.WriteRune('\\')
 		}
 		b.WriteRune(rs[i])
 		i++

@@ -3,8 +3,6 @@ package models
 import (
 	"context"
 	"database/sql"
-
-	"github.com/jackc/pgx/v5"
 )
 
 // User represents the users table (Telegram users, id = Telegram user id).
@@ -49,13 +47,7 @@ func (r users) Upsert(ctx context.Context, u *User) (*User, error) {
 }
 
 func (r users) CaptchaSolved(ctx context.Context, id int64) (bool, error) {
-	var solved bool
-	err := r.db.QueryRow(ctx,
-		`SELECT captcha_solved_at IS NOT NULL FROM users WHERE id = $1`, id).Scan(&solved)
-	if err == pgx.ErrNoRows {
-		return false, nil
-	}
-	return solved, err
+	return queryFlag(ctx, r.db, `SELECT captcha_solved_at IS NOT NULL FROM users WHERE id = $1`, id)
 }
 
 func (r users) MarkCaptchaSolved(ctx context.Context, id int64) error {

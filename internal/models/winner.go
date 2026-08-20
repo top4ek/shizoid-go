@@ -49,7 +49,7 @@ func (r winners) LastWinner(ctx context.Context, chatID int64) (int64, string, s
 	var id int64
 	var username, name string
 	err := r.db.QueryRow(ctx, q, chatID).Scan(&id, &username, &name)
-	if err == pgx.ErrNoRows {
+	if notFound(err) {
 		return 0, "", "", false, nil
 	}
 	if err != nil {
@@ -67,18 +67,8 @@ func (r winners) TopOfYear(ctx context.Context, chatID int64, limit int) ([]Scor
 		GROUP BY w.user_id, name
 		ORDER BY wins DESC
 		LIMIT $2`
-	rows, err := r.db.Query(ctx, q, chatID, limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var entries []ScoreEntry
-	for rows.Next() {
-		var e ScoreEntry
-		if err := rows.Scan(&e.UserID, &e.Name, &e.Score); err != nil {
-			return nil, err
-		}
-		entries = append(entries, e)
-	}
-	return entries, rows.Err()
+	return queryRows(ctx, r.db, q, []any{chatID, limit},
+		func(rows pgx.Rows) (e ScoreEntry, err error) {
+			return e, rows.Scan(&e.UserID, &e.Name, &e.Score)
+		})
 }

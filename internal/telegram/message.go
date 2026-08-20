@@ -40,28 +40,42 @@ func Typing(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 	}
 }
 
-func Reply(ctx context.Context, b *bot.Bot, update *tgmodels.Update, text string, disableLinkPreview ...bool) {
+// Reply answers the message that triggered the handler.
+func Reply(ctx context.Context, b *bot.Bot, update *tgmodels.Update, text string) {
 	if update.Message == nil {
 		return
 	}
-	opts := ChatMessageOpts{ReplyToMessageID: update.Message.ID}
-	if len(disableLinkPreview) > 0 && disableLinkPreview[0] {
-		opts.DisableLinkPreview = true
-	}
-	SendFromUpdate(ctx, b, update, text, opts)
+	SendFromUpdate(ctx, b, update, text, ChatMessageOpts{ReplyToMessageID: update.Message.ID})
 }
 
-func Send(ctx context.Context, b *bot.Bot, update *tgmodels.Update, text string, replyToMessageID int, disableLinkPreview ...bool) {
+// ReplyNoPreview is Reply for text carrying a @mention or link, whose preview
+// card Telegram would otherwise render (and turn into a tappable button).
+func ReplyNoPreview(ctx context.Context, b *bot.Bot, update *tgmodels.Update, text string) {
 	if update.Message == nil {
 		return
 	}
-	opts := ChatMessageOpts{ReplyToMessageID: replyToMessageID}
-	if len(disableLinkPreview) > 0 && disableLinkPreview[0] {
-		opts.DisableLinkPreview = true
-	}
-	SendFromUpdate(ctx, b, update, text, opts)
+	SendFromUpdate(ctx, b, update, text, ChatMessageOpts{
+		ReplyToMessageID:   update.Message.ID,
+		DisableLinkPreview: true,
+	})
 }
 
+// Impersonate posts text as the bot and removes the command that asked for it,
+// so the result reads as if the bot spoke on its own.
+func Impersonate(ctx context.Context, b *bot.Bot, update *tgmodels.Update, text string, opts ChatMessageOpts) {
+	if update.Message == nil {
+		return
+	}
+	if update.Message.ReplyToMessage != nil {
+		opts.ReplyToMessageID = update.Message.ReplyToMessage.ID
+	}
+	SendFromUpdate(ctx, b, update, text, opts)
+	Delete(ctx, b, update.Message.Chat.ID, update.Message.ID)
+}
+
+// SendFromUpdate sends into the chat (and forum topic) the update came from.
+// It never adds a reply target of its own: Impersonate deletes the triggering
+// message, so replying to it would leave a dangling reply.
 func SendFromUpdate(ctx context.Context, b *bot.Bot, update *tgmodels.Update, text string, opts ChatMessageOpts) {
 	if update.Message == nil {
 		return

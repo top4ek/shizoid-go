@@ -37,8 +37,7 @@ func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 		telegram.Reply(ctx, b, update, locale.T(lang, "lang.unknown", "list", available))
 		return
 	}
-	if !utils.IsChatAdmin(ctx, b, update.Message.Chat.ID, update.Message.From.ID) {
-		telegram.Reply(ctx, b, update, locale.Random(lang, "nok"))
+	if !utils.RequireChatAdmin(ctx, b, update, lang) {
 		return
 	}
 	if err := app.Store().Chats.SetLocale(ctx, chat.ID, payload); err != nil {

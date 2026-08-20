@@ -2,8 +2,6 @@ package models
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5"
 )
 
 type greetings struct{ db DBTX }
@@ -19,7 +17,7 @@ func (r greetings) Set(ctx context.Context, chatID int64, text string) error {
 func (r greetings) Get(ctx context.Context, chatID int64) (string, bool, error) {
 	var text string
 	err := r.db.QueryRow(ctx, `SELECT text FROM greetings WHERE chat_id = $1`, chatID).Scan(&text)
-	if err == pgx.ErrNoRows {
+	if notFound(err) {
 		return "", false, nil
 	}
 	if err != nil {

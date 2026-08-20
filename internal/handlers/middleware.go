@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"strings"
 	"sync"
@@ -137,7 +136,7 @@ func Ingest(next bot.HandlerFunc) bot.HandlerFunc {
 		}
 
 		chat := chatModel(msg)
-		user := userModel(msg.From)
+		user := models.UserFromTelegram(msg.From)
 		left := msg.LeftChatMember != nil && msg.LeftChatMember.ID == msg.From.ID
 
 		persistedChat, err := app.Store().Ingest.EnsureEntities(ctx, chat, user, left)
@@ -248,21 +247,11 @@ func chatModelFromChat(c tgmodels.Chat) *models.Chat {
 		Locale:         defaultLocale(),
 		GenerationMode: config.DefaultGenerationMode,
 	}
-	out.Title = nullString(c.Title)
-	out.FirstName = nullString(c.FirstName)
-	out.LastName = nullString(c.LastName)
-	out.Username = nullString(c.Username)
+	out.Title = models.NullString(c.Title)
+	out.FirstName = models.NullString(c.FirstName)
+	out.LastName = models.NullString(c.LastName)
+	out.Username = models.NullString(c.Username)
 	return out
-}
-
-func userModel(u *tgmodels.User) *models.User {
-	m := &models.User{ID: u.ID}
-	m.IsBot.Bool, m.IsBot.Valid = u.IsBot, true
-	m.FirstName = nullString(u.FirstName)
-	m.LastName = nullString(u.LastName)
-	m.Username = nullString(u.Username)
-	m.LanguageCode = nullString(u.LanguageCode)
-	return m
 }
 
 func defaultLocale() string {
@@ -295,8 +284,4 @@ func isBotCommand(msg *tgmodels.Message) bool {
 		}
 	}
 	return false
-}
-
-func nullString(s string) sql.NullString {
-	return sql.NullString{String: s, Valid: s != ""}
 }

@@ -22,13 +22,7 @@ func Handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 		return
 	}
 
-	replyToID := 0
-	if update.Message.ReplyToMessage != nil {
-		replyToID = update.Message.ReplyToMessage.ID
-	}
-
-	telegram.Send(ctx, b, update, text(update), replyToID)
-	telegram.Delete(ctx, b, update.Message.Chat.ID, update.Message.ID)
+	telegram.Impersonate(ctx, b, update, text(update), telegram.ChatMessageOpts{})
 }
 
 func canReply(update *models.Update) bool {

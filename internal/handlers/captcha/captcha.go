@@ -3,8 +3,6 @@ package captcha
 
 import (
 	"context"
-	"database/sql"
-	"strings"
 	"time"
 
 	"github.com/go-telegram/bot"
@@ -33,9 +31,8 @@ func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 	chatID := update.Message.Chat.ID
 	lang := app.Locale(ctx)
 
-	payload := strings.TrimSpace(utils.ExtractCommandPayloadText(update))
-	cmd, _, _ := strings.Cut(payload, " ")
-	switch strings.ToLower(cmd) {
+	verb, _ := utils.CutSubcommand(update)
+	switch verb {
 	case "enable":
 		if err := app.Store().Chats.SetCaptcha(ctx, chatID, true); err != nil {
 			logger.Instance().Error("captcha enable", zap.Error(err))
@@ -194,7 +191,7 @@ func Callback(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
 		return
 	}
 
-	user := userFromTelegram(&cq.From)
+	user := models.UserFromTelegram(&cq.From)
 	if err := app.Store().Ingest.EnsureMember(ctx, chatID, user); err != nil {
 		logger.Instance().Error("captcha ensure member", zap.Error(err))
 		_, _ = b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
@@ -272,24 +269,6 @@ func callbackLocale(ctx context.Context, chatID int64) string {
 		return app.Locale(ctx)
 	}
 	return app.Locale(app.WithChat(ctx, chat))
-}
-
-func userFromTelegram(u *tgmodels.User) *models.User {
-	m := &models.User{ID: u.ID}
-	m.IsBot.Bool, m.IsBot.Valid = u.IsBot, true
-	if u.FirstName != "" {
-		m.FirstName = sql.NullString{String: u.FirstName, Valid: true}
-	}
-	if u.LastName != "" {
-		m.LastName = sql.NullString{String: u.LastName, Valid: true}
-	}
-	if u.Username != "" {
-		m.Username = sql.NullString{String: u.Username, Valid: true}
-	}
-	if u.LanguageCode != "" {
-		m.LanguageCode = sql.NullString{String: u.LanguageCode, Valid: true}
-	}
-	return m
 }
 
 func formatUserLink(u tgmodels.User) string {
