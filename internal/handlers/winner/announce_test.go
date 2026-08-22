@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
@@ -165,6 +166,19 @@ func TestJoinBlockPlacesTheCeremonyAboveTheResult(t *testing.T) {
 	a := announcement{Result: "Пиздаболом дня стал вася"}
 	assert.Equal(t, a.Result, joinBlock("", a.Result))
 	assert.Equal(t, "ceremony\n\n"+a.Result, joinBlock("ceremony", a.Result))
+}
+
+// A model that never answers must not swallow the announcement: past the
+// ceremony budget the queue stops retrying for its words and posts the result
+// block on its own.
+func TestCeremonyDueOnlyWithinTheBudget(t *testing.T) {
+	now := time.Date(2026, 8, 22, 1, 20, 0, 0, time.UTC)
+	expiresAt := now.Add(announcementTTL)
+
+	assert.True(t, ceremonyDue(expiresAt, now), "a job that has just been queued")
+	assert.True(t, ceremonyDue(expiresAt, now.Add(ceremonyBudget-time.Minute)))
+	assert.False(t, ceremonyDue(expiresAt, now.Add(ceremonyBudget)), "the budget is spent")
+	assert.False(t, ceremonyDue(expiresAt, now.Add(announcementTTL)))
 }
 
 // The message is cut at its end, and the result block is what sits there: a

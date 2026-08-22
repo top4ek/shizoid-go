@@ -25,8 +25,12 @@ const (
 	// budget keeps room to send the message if the model stalls.
 	announceTimeout = 4 * time.Minute
 	// announcementTTL is how long a queued announcement stays worth sending.
-	// Past it the ceremony is about a day nobody remembers.
-	announcementTTL = 48 * time.Hour
+	// Past it the ceremony is about a day nobody remembers, so it has to land
+	// inside the day it is about - the draw runs daily and 20h leaves a margin.
+	announcementTTL = 20 * time.Hour
+	// ceremonyBudget is how long a queued announcement holds out for the model
+	// before going out without it.
+	ceremonyBudget = 2 * time.Hour
 	// topLimit is how many rows the year leaderboard carries.
 	topLimit = 10
 	// scorerLimit is how many scorers the announcement talks about. It matches
@@ -65,15 +69,24 @@ func Announce(ctx context.Context, b *bot.Bot, chat *models.Chat, chosen models.
 // Deliver posts one queued announcement. A failure is returned rather than
 // logged so the queue retries it, the send included - unless Telegram refused
 // for good, in which case retrying would only re-run the model against a chat
-// that can never receive the message.
-func Deliver(ctx context.Context, b *bot.Bot, chatID int64, payload []byte) error {
+// that can never receive the message. Once the ceremony budget is spent the
+// model stops being a reason to hold the announcement back and the result block
+// goes out on its own.
+func Deliver(ctx context.Context, b *bot.Bot, chatID int64, payload []byte, expiresAt time.Time) error {
 	var a announcement
 	if err := json.Unmarshal(payload, &a); err != nil {
 		return err
 	}
 	text, err := neuralText(ctx, a.System, a.User)
 	if err != nil {
-		return err
+		if ceremonyDue(expiresAt, time.Now()) {
+			return err
+		}
+		logger.Instance().Warn("winner announcement without ceremony",
+			zap.Int64("chat_id", chatID),
+			zap.Error(err),
+		)
+		text = ""
 	}
 	err = send(ctx, b, chatID, joinBlock(fitCeremony(text, a.Result), a.Result))
 	if err != nil && telegram.IsPermanentError(err) {
@@ -84,6 +97,14 @@ func Deliver(ctx context.Context, b *bot.Bot, chatID int64, payload []byte) erro
 		return nil
 	}
 	return err
+}
+
+// ceremonyDue reports whether a failed model call is still worth another
+// attempt. The job carries only its expiry, so how long it has been queued is
+// derived from that: past the budget the announcement goes out without the
+// model's words, because a draw nobody hears about is worse than a bare one.
+func ceremonyDue(expiresAt, now time.Time) bool {
+	return now.Before(expiresAt.Add(ceremonyBudget - announcementTTL))
 }
 
 // fitCeremony bounds the model's half of the announcement. The 4-8 sentence

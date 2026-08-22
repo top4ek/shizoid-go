@@ -26,10 +26,10 @@ const (
 	// cron.SkipIfStillRunning, so this only decides how much of the backlog a
 	// single tick works through.
 	queueBudget = 15 * time.Minute
-	// baseBackoff and maxBackoff shape the retry curve: 1m, 2m, 4m, 8m, 16m,
-	// then every 30m until the job succeeds or expires.
+	// baseBackoff and maxBackoff shape the retry curve: 1m, 2m, 4m, 8m, then
+	// every 10m until the job succeeds or expires.
 	baseBackoff = time.Minute
-	maxBackoff  = 30 * time.Minute
+	maxBackoff  = 10 * time.Minute
 	// memoryTTL is how long a memory job stays worth running. Past it the
 	// window it would summarize has been superseded several times over.
 	memoryTTL = 24 * time.Hour
@@ -148,7 +148,7 @@ func runJob(ctx context.Context, b *bot.Bot, job models.SummaryJob) error {
 
 	switch job.Kind {
 	case models.SummaryJobWinner:
-		return winner.Deliver(jobCtx, b, job.ChatID, job.Payload)
+		return winner.Deliver(jobCtx, b, job.ChatID, job.Payload, job.ExpiresAt)
 	case models.SummaryJobMemory:
 		return summarizeMemory(jobCtx, job.ChatID)
 	default:

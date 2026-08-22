@@ -37,12 +37,12 @@ worker (`summary_queue_cron`, `@every 1m`) drains it:
 - One pending job per chat per kind.
   Re-queueing the same kind replaces the pending one, so a fresh draw supersedes
   a stale one rather than queueing behind it.
-- A failed job is retried with exponential backoff - 1m, 2m, 4m, 8m, 16m, then
-  every 30m - and one failure stops the rest of the drain, since the chain is a
-  single backend and the jobs behind it would only rediscover the same outage.
+- A failed job is retried with exponential backoff - 1m, 2m, 4m, 8m, then every
+  10m - and one failure stops the rest of the drain, since the chain is a single
+  backend and the jobs behind it would only rediscover the same outage.
 - Claiming a job leases it for 10 minutes rather than removing it, so a crash
   mid-job makes it due again instead of losing it.
-- A job is only ever given up on when it expires (48 h for an announcement, 24 h
+- A job is only ever given up on when it expires (20 h for an announcement, 24 h
   for a memory summary), which is logged at `error`.
 
 Consequences worth knowing:
@@ -51,6 +51,10 @@ Consequences worth knowing:
   nothing is posted at 01:20 if the model is unreachable, and the full message
   (ceremony, result line and year table) goes out when it answers.
   Without a summary chain the plain announcement is posted immediately as before.
+- That wait is bounded: the model gets the first **2 hours**, after which the
+  announcement is posted without a ceremony - just the result line and the year
+  table - and the drop is logged at `warn`.
+  So a draw is always announced the same day, whatever the model does.
 - While a summary chain is configured, the daily message prune keeps everything
   newer than `chats.memory_summarized_at`, so a long outage cannot delete history
   before the summarizer has read it.

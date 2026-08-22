@@ -13,7 +13,6 @@ func TestBackoffDoublesThenFlattens(t *testing.T) {
 		2 * time.Minute,
 		4 * time.Minute,
 		8 * time.Minute,
-		16 * time.Minute,
 		maxBackoff,
 		maxBackoff,
 	}
