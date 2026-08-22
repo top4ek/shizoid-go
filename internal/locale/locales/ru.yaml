@@ -73,7 +73,6 @@ ru:
     *Каптча:* %{captcha}
     *Приветствие:* %{greeting}
     *Победитель:* %{winner}
-    *Новости:* %{news}
     *Язык:* %{lang}
 
     *Версия:* %{version}
@@ -152,9 +151,8 @@ ru:
       *Текущая статистика:*
 
       %{top}
-    winner: |
-      _%{name}_ дня — %{user}
-
+    winner: "_%{name}_ дня — %{user}"
+    year_top: |
       *Топ 10 за год:*
       %{top}
     no_one: "Пока никого :("
@@ -163,15 +161,6 @@ ru:
     enabled: "Розыгрыш победителя включён: %{name}"
     turned_off: "Розыгрыш победителя выключен."
     usage: "Использование: /winner, /winner current, /winner enable [название], /winner disable"
-
-  news:
-    current: "Стиль выпуска новостей:\n%{style}"
-    disabled: "Выключен"
-    none: "Ежедневный выпуск новостей выключен."
-    default: "общие новости"
-    enabled: "Ежедневный выпуск новостей включён. Стиль: %{style}"
-    turned_off: "Ежедневный выпуск новостей выключен."
-    usage: "Использование: /news, /news enable [стиль], /news disable"
 
   greeting:
     set: "Приветствие установлено."

@@ -86,7 +86,8 @@ func TestSummaryConfigured(t *testing.T) {
 	var nilClient *Client
 	assert.False(t, nilClient.SummaryConfigured())
 	assert.False(t, (&Client{}).SummaryConfigured())
-	// News runs over the summary chain, so a reply-only setup is still unconfigured.
+	// The winner announcement runs over the summary chain, so a reply-only setup
+	// is still unconfigured.
 	assert.False(t, (&Client{reply: []Provider{{}}}).SummaryConfigured())
 	assert.True(t, (&Client{summary: []Provider{{}}}).SummaryConfigured())
 }

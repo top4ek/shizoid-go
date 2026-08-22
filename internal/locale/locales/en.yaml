@@ -73,7 +73,6 @@ en:
     *Captcha:* %{captcha}
     *Greeting:* %{greeting}
     *Winner:* %{winner}
-    *News:* %{news}
     *Language:* %{lang}
 
     *Version:* %{version}
@@ -150,9 +149,8 @@ en:
       *Current stats:*
 
       %{top}
-    winner: |
-      _%{name}_ of the day — %{user}
-
+    winner: "_%{name}_ of the day — %{user}"
+    year_top: |
       *Top 10 of the year:*
       %{top}
     no_one: "No one yet :("
@@ -161,15 +159,6 @@ en:
     enabled: "Winner draw enabled: %{name}"
     turned_off: "Winner draw disabled."
     usage: "Usage: /winner, /winner current, /winner enable [label], /winner disable"
-
-  news:
-    current: "News issue style:\n%{style}"
-    disabled: "Disabled"
-    none: "The daily news issue is off."
-    default: "general chat news"
-    enabled: "Daily news issue enabled. Style: %{style}"
-    turned_off: "Daily news issue disabled."
-    usage: "Usage: /news, /news enable [style], /news disable"
 
   greeting:
     set: "Greeting set."

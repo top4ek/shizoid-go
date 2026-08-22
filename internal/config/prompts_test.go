@@ -21,11 +21,11 @@ func TestPromptsAssembledFromDefaults(t *testing.T) {
 	loadYAML(t, "telegram:\n  token: \"123:ABC\"\n")
 
 	assert.NotEmpty(t, Environment.AppPrompt)
-	assert.NotEmpty(t, Environment.NewsPrompt)
+	assert.NotEmpty(t, Environment.WinnerPrompt)
 	assert.NotEmpty(t, Environment.SummaryPrompt)
 
 	// shared blocks reach every prompt that lists them
-	for _, prompt := range []string{Environment.AppPrompt, Environment.NewsPrompt} {
+	for _, prompt := range []string{Environment.AppPrompt, Environment.WinnerPrompt} {
 		assert.Contains(t, prompt, "[TELEGRAM MARKUP]")
 		assert.Contains(t, prompt, "[RULE PRECEDENCE]")
 	}
@@ -34,7 +34,7 @@ func TestPromptsAssembledFromDefaults(t *testing.T) {
 
 // The reply prompt was tuned to stop small models emitting tables and lists.
 // Splitting it into blocks must not touch those lines, and must not leak them
-// into the news issue, which is a list of items by design.
+// into the winner announcement, which runs far longer than a chat reply.
 func TestChatFormatRulesSurviveTheSplit(t *testing.T) {
 	loadYAML(t, "telegram:\n  token: \"123:ABC\"\n")
 
@@ -43,38 +43,37 @@ func TestChatFormatRulesSurviveTheSplit(t *testing.T) {
 
 	assert.Contains(t, Environment.AppPrompt, noListMarker)
 	assert.Contains(t, Environment.AppPrompt, noTables)
-	assert.NotContains(t, Environment.NewsPrompt, noListMarker)
-	assert.NotContains(t, Environment.NewsPrompt, noTables)
+	assert.NotContains(t, Environment.WinnerPrompt, noListMarker)
+	assert.NotContains(t, Environment.WinnerPrompt, noTables)
 }
 
 // Every label appended to a system prompt at runtime must be named by the
 // precedence block, otherwise the rules bind to nothing. The headers live in this
-// package precisely so this test can see all of them, including [NEWS STYLE],
-// which only internal/handlers/news appends.
+// package precisely so this test can see all of them.
 func TestRuntimeLabelsAreNamedInThePrompts(t *testing.T) {
 	loadYAML(t, "telegram:\n  token: \"123:ABC\"\n")
 
-	for _, header := range []string{ChatInstructionsHeader, ChatMemoryHeader, NewsStyleHeader} {
+	for _, header := range []string{ChatInstructionsHeader, ChatMemoryHeader} {
 		label, _, ok := strings.Cut(header, "\n")
 		require.True(t, ok, "header %q must start with a label line", header)
 		require.True(t, strings.HasPrefix(label, "["), "header %q must start with a [LABEL]", header)
 		assert.Contains(t, Environment.AppPrompt, label)
 	}
 
-	// The news prompt carries the persona labels but not the memory one: news is
-	// generated from a chat log, never from the stored memory.
-	for _, label := range []string{"[CHAT INSTRUCTIONS]", "[NEWS STYLE]"} {
-		assert.Contains(t, Environment.NewsPrompt, label)
+	// The winner announcement appends both runtime blocks: the chat persona and
+	// the long-term memory it draws its in-jokes from.
+	for _, label := range []string{"[CHAT INSTRUCTIONS]", "[LONG-TERM CHAT MEMORY]"} {
+		assert.Contains(t, Environment.WinnerPrompt, label)
 	}
 }
 
-// The news prompt drops [RESPONSE LENGTH & TONE] on purpose (a bulletin must not
-// obey the chat contract's 1-3 sentence limit), so no block it does carry may
-// point at that section by name.
-func TestNewsPromptReferencesNoMissingSection(t *testing.T) {
+// The winner prompt drops [RESPONSE LENGTH & TONE] on purpose (an announcement
+// must not obey the chat contract's 1-3 sentence limit), so no block it does
+// carry may point at that section by name.
+func TestWinnerPromptReferencesNoMissingSection(t *testing.T) {
 	loadYAML(t, "telegram:\n  token: \"123:ABC\"\n")
 
-	assert.NotContains(t, Environment.NewsPrompt, "[RESPONSE LENGTH & TONE]")
+	assert.NotContains(t, Environment.WinnerPrompt, "[RESPONSE LENGTH & TONE]")
 }
 
 func TestSharedBlockOverrideReachesEveryPromptUsingIt(t *testing.T) {
@@ -90,7 +89,7 @@ app:
 
 	const custom = "Only plain text, nothing else."
 	assert.Contains(t, Environment.AppPrompt, custom)
-	assert.Contains(t, Environment.NewsPrompt, custom)
+	assert.Contains(t, Environment.WinnerPrompt, custom)
 	assert.NotContains(t, Environment.SummaryPrompt, custom)
 
 	// the block it replaced is gone, the untouched blocks stay
@@ -104,12 +103,12 @@ telegram:
   token: "123:ABC"
 app:
   prompts:
-    news_tone: |
+    winner_tone: |
       [TONE]
       - Report it straight, no jokes.
 `)
 
 	const custom = "Report it straight, no jokes."
-	assert.Contains(t, Environment.NewsPrompt, custom)
+	assert.Contains(t, Environment.WinnerPrompt, custom)
 	assert.NotContains(t, Environment.AppPrompt, custom)
 }

@@ -99,10 +99,32 @@ func previousWinner(ctx context.Context, chatID int64, lang string) string {
 	if chat != nil && chat.Winner.Valid && chat.Winner.String != "" {
 		label = chat.Winner.String
 	}
-	return locale.T(lang, "winner.winner",
+	return joinBlock(locale.T(lang, "winner.winner",
 		"name", telegram.FormatPlain(label),
-		"user", FormatWinnerUser(lang, userID, username, name),
-		"top", FormatTop(lang, entries))
+		"user", FormatWinnerUser(lang, userID, username, name)),
+		yearBlock(lang, entries))
+}
+
+// yearBlock renders the leaderboard of the year, or nothing at all: a chat
+// without a single recorded draw would otherwise get a bare header with no rows
+// under it.
+func yearBlock(lang string, entries []models.ScoreEntry) string {
+	if len(entries) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(locale.T(lang, "winner.year_top", "top", FormatTop(lang, entries)))
+}
+
+// joinBlock separates two announcement blocks by a blank line, skipping the
+// separator when either one is empty.
+func joinBlock(head, block string) string {
+	if head == "" {
+		return block
+	}
+	if block == "" {
+		return head
+	}
+	return head + "\n\n" + block
 }
 
 // FormatWinnerUser renders the daily winner as a MarkdownV2 user link.

@@ -245,7 +245,7 @@ func TestIntegrationMessagesPruneByBytes(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, chatIDs, chat.ID)
 
-	deleted, err := s.Messages.PruneChatByBytes(ctx, chat.ID, 50)
+	deleted, err := s.Messages.PruneChatByBytes(ctx, chat.ID, 50, false)
 	require.NoError(t, err)
 	assert.Equal(t, int64(5), deleted, "rows beyond the 50-byte budget must be pruned")
 
@@ -315,21 +315,190 @@ func TestIntegrationWinnersLifecycle(t *testing.T) {
 	assert.Equal(t, 1, top[0].Score)
 }
 
-func TestIntegrationChatNewsRoundTrip(t *testing.T) {
+func TestIntegrationMessagesPruneKeepsUnsummarized(t *testing.T) {
 	s := requireDB(t)
 	ctx := context.Background()
 	chat := seedChat(t, ctx)
-	assert.False(t, chat.NewsEnabled())
+	userID := chat.ID + 500_000
 
-	require.NoError(t, s.Chats.SetNews(ctx, chat.ID, sql.NullString{String: "спорт", Valid: true}))
-	stored, err := s.Chats.Get(ctx, chat.ID)
-	require.NoError(t, err)
-	assert.True(t, stored.NewsEnabled())
-	assert.Equal(t, "спорт", stored.News.String)
+	payload := "0123456789" // 10 bytes each
+	for range 5 {
+		require.NoError(t, s.Messages.Append(ctx, chat.ID, userID, payload))
+	}
+	// Everything so far counts as summarized; everything after it does not.
+	require.NoError(t, s.Chats.SetMemorySummarizedAt(ctx, chat.ID, time.Now()))
+	for range 5 {
+		require.NoError(t, s.Messages.Append(ctx, chat.ID, userID, payload))
+	}
 
-	require.NoError(t, s.Chats.SetNews(ctx, chat.ID, sql.NullString{}))
-	stored, err = s.Chats.Get(ctx, chat.ID)
+	deleted, err := s.Messages.PruneChatByBytes(ctx, chat.ID, 20, true)
 	require.NoError(t, err)
-	assert.False(t, stored.News.Valid)
-	assert.False(t, stored.NewsEnabled())
+	assert.Equal(t, int64(5), deleted, "only the summarized rows may be pruned")
+
+	texts, err := s.Messages.RecentTextsByBytes(ctx, chat.ID, 10_000)
+	require.NoError(t, err)
+	assert.Len(t, texts, 5, "the unsummarized tail must survive its byte budget")
+}
+
+func TestIntegrationMessagesPruneKeepsAllWhenNeverSummarized(t *testing.T) {
+	s := requireDB(t)
+	ctx := context.Background()
+	chat := seedChat(t, ctx)
+	userID := chat.ID + 500_000
+
+	for range 10 {
+		require.NoError(t, s.Messages.Append(ctx, chat.ID, userID, "0123456789"))
+	}
+
+	deleted, err := s.Messages.PruneChatByBytes(ctx, chat.ID, 20, true)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), deleted, "a chat with no summary yet has nothing prunable")
+}
+
+func TestIntegrationSummaryJobsClaimLeasesOneJob(t *testing.T) {
+	s := requireDB(t)
+	ctx := context.Background()
+	chat := seedChat(t, ctx)
+
+	require.NoError(t, s.SummaryJobs.Enqueue(ctx, chat.ID, SummaryJobWinner, []byte(`{"a":1}`), time.Hour))
+
+	job, ok, err := s.SummaryJobs.Claim(ctx, time.Minute)
+	require.NoError(t, err)
+	require.True(t, ok)
+	assert.Equal(t, chat.ID, job.ChatID)
+	assert.Equal(t, SummaryJobWinner, job.Kind)
+	assert.JSONEq(t, `{"a":1}`, string(job.Payload))
+	assert.Equal(t, 1, job.Attempts, "claiming counts as an attempt")
+
+	_, ok, err = s.SummaryJobs.Claim(ctx, time.Minute)
+	require.NoError(t, err)
+	assert.False(t, ok, "a leased job must not be claimable again")
+
+	// Retry overwrites the lease, so a job due again is picked back up.
+	require.NoError(t, s.SummaryJobs.Retry(ctx, job, -time.Second))
+	again, ok, err := s.SummaryJobs.Claim(ctx, time.Minute)
+	require.NoError(t, err)
+	require.True(t, ok)
+	assert.Equal(t, job.ID, again.ID)
+	assert.Equal(t, 2, again.Attempts)
+
+	require.NoError(t, s.SummaryJobs.Done(ctx, again))
+	_, ok, err = s.SummaryJobs.Claim(ctx, time.Minute)
+	require.NoError(t, err)
+	assert.False(t, ok)
+}
+
+func TestIntegrationSummaryJobsEnqueueReplacesThePendingOne(t *testing.T) {
+	s := requireDB(t)
+	ctx := context.Background()
+	chat := seedChat(t, ctx)
+
+	require.NoError(t, s.SummaryJobs.Enqueue(ctx, chat.ID, SummaryJobWinner, []byte(`{"draw":"old"}`), time.Hour))
+	_, ok, err := s.SummaryJobs.Claim(ctx, time.Hour)
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	require.NoError(t, s.SummaryJobs.Enqueue(ctx, chat.ID, SummaryJobWinner, []byte(`{"draw":"new"}`), time.Hour))
+
+	job, ok, err := s.SummaryJobs.Claim(ctx, time.Minute)
+	require.NoError(t, err)
+	require.True(t, ok, "re-enqueueing must clear the lease of the job it replaces")
+	require.Equal(t, chat.ID, job.ChatID)
+	assert.JSONEq(t, `{"draw":"new"}`, string(job.Payload))
+	assert.Equal(t, 1, job.Attempts, "a replaced job starts its backoff over")
+
+	require.NoError(t, s.SummaryJobs.Done(ctx, job))
+}
+
+// The memory cron and the queue drain run side by side, so an Enqueue can land
+// between claiming a job and finishing it. Finishing the claim must not take the
+// work that was queued in the meantime down with it.
+func TestIntegrationSummaryJobsDoneSparesWorkQueuedMidJob(t *testing.T) {
+	s := requireDB(t)
+	ctx := context.Background()
+	chat := seedChat(t, ctx)
+
+	require.NoError(t, s.SummaryJobs.Enqueue(ctx, chat.ID, SummaryJobMemory, []byte(`{"run":"first"}`), time.Hour))
+	job, ok, err := s.SummaryJobs.Claim(ctx, time.Hour)
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	require.NoError(t, s.SummaryJobs.Enqueue(ctx, chat.ID, SummaryJobMemory, []byte(`{"run":"second"}`), time.Hour))
+	require.NoError(t, s.SummaryJobs.Done(ctx, job))
+
+	queued, ok, err := s.SummaryJobs.Claim(ctx, time.Minute)
+	require.NoError(t, err)
+	require.True(t, ok, "the job queued mid-run must survive the finish of the one it replaced")
+	assert.JSONEq(t, `{"run":"second"}`, string(queued.Payload))
+	require.NoError(t, s.SummaryJobs.Done(ctx, queued))
+}
+
+// A failed job that was replaced while it ran keeps the schedule Enqueue gave
+// it: the backoff belongs to the attempt that failed, not to the new payload.
+func TestIntegrationSummaryJobsRetrySparesWorkQueuedMidJob(t *testing.T) {
+	s := requireDB(t)
+	ctx := context.Background()
+	chat := seedChat(t, ctx)
+
+	require.NoError(t, s.SummaryJobs.Enqueue(ctx, chat.ID, SummaryJobMemory, nil, time.Hour))
+	job, ok, err := s.SummaryJobs.Claim(ctx, time.Hour)
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	require.NoError(t, s.SummaryJobs.Enqueue(ctx, chat.ID, SummaryJobMemory, nil, time.Hour))
+	require.NoError(t, s.SummaryJobs.Retry(ctx, job, time.Hour))
+
+	queued, ok, err := s.SummaryJobs.Claim(ctx, time.Minute)
+	require.NoError(t, err)
+	require.True(t, ok, "the requeued job must stay due instead of inheriting the failure's backoff")
+	assert.Equal(t, 1, queued.Attempts)
+	require.NoError(t, s.SummaryJobs.Done(ctx, queued))
+}
+
+func TestIntegrationSummaryJobsKindsAreIndependent(t *testing.T) {
+	s := requireDB(t)
+	ctx := context.Background()
+	chat := seedChat(t, ctx)
+
+	require.NoError(t, s.SummaryJobs.Enqueue(ctx, chat.ID, SummaryJobWinner, []byte(`{"k":"w"}`), time.Hour))
+	require.NoError(t, s.SummaryJobs.Enqueue(ctx, chat.ID, SummaryJobMemory, nil, time.Hour))
+
+	kinds := map[SummaryJobKind][]byte{}
+	for range 2 {
+		job, ok, err := s.SummaryJobs.Claim(ctx, time.Hour)
+		require.NoError(t, err)
+		require.True(t, ok)
+		require.Equal(t, chat.ID, job.ChatID)
+		kinds[job.Kind] = job.Payload
+		require.NoError(t, s.SummaryJobs.Done(ctx, job))
+	}
+	require.Len(t, kinds, 2, "both kinds must coexist for one chat")
+	assert.JSONEq(t, `{"k":"w"}`, string(kinds[SummaryJobWinner]))
+	assert.JSONEq(t, `{}`, string(kinds[SummaryJobMemory]), "an empty payload is stored as an empty object")
+}
+
+func TestIntegrationSummaryJobsExpireOverdue(t *testing.T) {
+	s := requireDB(t)
+	ctx := context.Background()
+	chat := seedChat(t, ctx)
+
+	require.NoError(t, s.SummaryJobs.Enqueue(ctx, chat.ID, SummaryJobWinner, nil, -time.Second))
+	require.NoError(t, s.SummaryJobs.Enqueue(ctx, chat.ID, SummaryJobMemory, nil, time.Hour))
+
+	all, err := s.SummaryJobs.ExpireOverdue(ctx)
+	require.NoError(t, err)
+	var expired []SummaryJob
+	for _, job := range all {
+		if job.ChatID == chat.ID {
+			expired = append(expired, job)
+		}
+	}
+	require.Len(t, expired, 1)
+	assert.Equal(t, SummaryJobWinner, expired[0].Kind)
+
+	job, ok, err := s.SummaryJobs.Claim(ctx, time.Minute)
+	require.NoError(t, err)
+	require.True(t, ok, "a job still in date must survive the sweep")
+	assert.Equal(t, SummaryJobMemory, job.Kind)
+	require.NoError(t, s.SummaryJobs.Done(ctx, job))
 }

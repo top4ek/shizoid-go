@@ -4,9 +4,7 @@ package scheduler
 
 import (
 	"context"
-	"database/sql"
 	"math/rand/v2"
-	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -17,12 +15,9 @@ import (
 	"shizoid/internal/app"
 	"shizoid/internal/config"
 	"shizoid/internal/handlers/captcha"
-	"shizoid/internal/handlers/news"
 	"shizoid/internal/handlers/winner"
-	"shizoid/internal/locale"
 	"shizoid/internal/logger"
 	"shizoid/internal/models"
-	"shizoid/internal/telegram"
 )
 
 // Start configures and launches the cron jobs. The returned Cron should be
@@ -41,8 +36,8 @@ func Start(b *bot.Bot) *cron.Cron {
 		{"winner", config.Environment.WinnerCron, func() { runWinners(b) }},
 		{"message prune", "@daily", runMessagePrune},
 		{"memory", config.Environment.MemoryCron, runMemory},
+		{"summary queue", config.Environment.SummaryQueueCron, func() { runSummaryQueue(b) }},
 		{"captcha", config.Environment.CaptchaCron, func() { runCaptcha(b) }},
-		{"news", config.Environment.NewsCron, func() { runNews(b) }},
 	} {
 		if _, err := c.AddFunc(job.spec, job.run); err != nil {
 			logger.Instance().Error("schedule "+job.name, zap.String("spec", job.spec), zap.Error(err))
@@ -81,8 +76,16 @@ func forEachActiveChat(name string, budget, perChat time.Duration, fn func(ctx c
 	)
 }
 
+// drawPool is how many of the day's top scorers the winner is drawn from, and
+// statsTop how many the announcement reports on.
+const (
+	drawPool = 3
+	statsTop = 10
+)
+
 func runWinners(b *bot.Bot) {
-	forEachActiveChat("winners", 10*time.Minute, time.Minute, func(ctx context.Context, chat *models.Chat) bool {
+	now := time.Now().UTC()
+	forEachActiveChat("winners", 30*time.Minute, time.Minute, func(ctx context.Context, chat *models.Chat) bool {
 		if !chat.WinnerEnabled() {
 			return false
 		}
@@ -94,11 +97,17 @@ func runWinners(b *bot.Bot) {
 		if done {
 			return false
 		}
-		top, err := app.Store().Participations.TopByScore(ctx, chat.ID, 3)
-		if err != nil || len(top) == 0 {
+		// Read before ResetScores: these are the standings the announcement
+		// reports on, the same ones /winner current shows.
+		standings, err := app.Store().Participations.TopByScore(ctx, chat.ID, statsTop)
+		if err != nil || len(standings) == 0 {
 			return false
 		}
-		chosen := top[rand.IntN(len(top))]
+		pool := standings
+		if len(pool) > drawPool {
+			pool = pool[:drawPool]
+		}
+		chosen := pool[rand.IntN(len(pool))]
 		inserted, err := app.Store().Winners.Create(ctx, chat.ID, chosen.UserID)
 		if err != nil {
 			logger.Instance().Error("winners: create", zap.Error(err))
@@ -110,87 +119,31 @@ func runWinners(b *bot.Bot) {
 		if err := app.Store().Participations.ResetScores(ctx, chat.ID); err != nil {
 			logger.Instance().Error("winners: reset", zap.Error(err))
 		}
-		announceWinner(ctx, b, chat.ID, chat.Locale, winnerLabel(chat.Winner.String, chat.Locale),
-			chosen.UserID, chosen.Username, chosen.Name)
+		if err := winner.Announce(ctx, b, chat, chosen, standings, now); err != nil {
+			logger.Instance().Error("winners: announce", zap.Int64("chat_id", chat.ID), zap.Error(err))
+		}
 		return true
 	})
 }
 
-func announceWinner(ctx context.Context, b *bot.Bot, chatID int64, lang, label string, userID int64, username, name string) {
-	entries, err := app.Store().Winners.TopOfYear(ctx, chatID, 10)
-	if err != nil {
-		logger.Instance().Error("winners: top of year", zap.Error(err))
-	}
-	text := locale.T(lang, "winner.winner",
-		"name", telegram.FormatPlain(label),
-		"user", winner.FormatWinnerUser(lang, userID, username, name),
-		"top", winner.FormatTop(lang, entries))
-	if _, err := telegram.SendToChat(ctx, b, chatID, text, telegram.ChatMessageOpts{
-		DisableNotification: true,
-		DisableLinkPreview:  true,
-	}); err != nil {
-		logger.Instance().Error("winners: announce", zap.Error(err))
-	}
-}
-
-func winnerLabel(label, lang string) string {
-	if label == "" {
-		return locale.T(lang, "winner.default")
-	}
-	return label
-}
-
+// runMemory queues a memory summary for every active chat. The work itself is
+// done by the summary queue, so a model that is down only delays it.
 func runMemory() {
-	forEachActiveChat("memory", 10*time.Minute, summaryChatTimeout, func(ctx context.Context, chat *models.Chat) bool {
-		existing := ""
-		if chat.Memory.Valid {
-			existing = chat.Memory.String
-		}
-		budget := summaryMessageBudget(existing)
-		if budget <= 0 {
-			return false
-		}
-		since := time.Time{}
-		if chat.MemorySummarizedAt.Valid {
-			since = chat.MemorySummarizedAt.Time
-		}
-		msgs, err := app.Store().Messages.TextsSinceByBytes(ctx, chat.ID, since, budget)
-		if err != nil || len(msgs) == 0 {
-			return false
-		}
-		logger.Instance().Debug("memory summarize",
-			zap.Int64("chat_id", chat.ID),
-			zap.Int("messages", len(msgs)),
-		)
-		summary, err := app.Neural().Summarize(ctx, config.Environment.SummaryPrompt, existing, msgs)
-		if err != nil || strings.TrimSpace(summary) == "" {
-			return false
-		}
-		summary = truncateRunes(summary, 4096)
-		if err := app.Store().Chats.SetMemory(ctx, chat.ID, sql.NullString{String: summary, Valid: true}); err != nil {
-			logger.Instance().Error("memory: store", zap.Error(err))
-			return false
-		}
-		if err := app.Store().Chats.SetMemorySummarizedAt(ctx, chat.ID, time.Now()); err != nil {
-			logger.Instance().Error("memory: mark summarized", zap.Error(err))
-		}
-		return true
-	})
-}
-
-// summaryChatTimeout bounds one chat's turn on the summary chain, which runs
-// over far more context than a reply and is the slowest call in the codebase.
-const summaryChatTimeout = 5 * time.Minute
-
-func runNews(b *bot.Bot) {
 	if !app.Neural().SummaryConfigured() {
 		return
 	}
-	now := time.Now().UTC()
-	forEachActiveChat("news", 30*time.Minute, summaryChatTimeout, func(ctx context.Context, chat *models.Chat) bool {
-		return news.PostChat(ctx, b, chat, now)
+	forEachActiveChat("memory", 10*time.Minute, time.Minute, func(ctx context.Context, chat *models.Chat) bool {
+		if err := app.Store().SummaryJobs.Enqueue(ctx, chat.ID, models.SummaryJobMemory, nil, memoryTTL); err != nil {
+			logger.Instance().Error("memory: enqueue", zap.Int64("chat_id", chat.ID), zap.Error(err))
+			return false
+		}
+		return true
 	})
 }
+
+// summaryChatTimeout bounds one job's turn on the summary chain, which runs over
+// far more context than a reply and is the slowest call in the codebase.
+const summaryChatTimeout = 5 * time.Minute
 
 func runCaptcha(b *bot.Bot) {
 	logger.Instance().Debug("cron: captcha")
@@ -201,6 +154,10 @@ func runCaptcha(b *bot.Bot) {
 
 func runMessagePrune() {
 	logger.Instance().Debug("cron: message prune")
+	// While memory summarization is running, history it has not read yet has to
+	// outlive the byte budget: the summary queue may be hours behind a model
+	// outage, and pruned messages are gone before it catches up.
+	keepUnsummarized := app.Neural().SummaryConfigured()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	chatIDs, err := app.Store().Messages.ChatIDs(ctx)
@@ -210,7 +167,7 @@ func runMessagePrune() {
 	}
 	var total int64
 	for _, chatID := range chatIDs {
-		n, err := app.Store().Messages.PruneChatByBytes(ctx, chatID, config.MaxReplyContextBytes)
+		n, err := app.Store().Messages.PruneChatByBytes(ctx, chatID, config.MaxReplyContextBytes, keepUnsummarized)
 		if err != nil {
 			logger.Instance().Error("prune messages", zap.Int64("chat_id", chatID), zap.Error(err))
 			continue

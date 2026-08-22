@@ -273,10 +273,10 @@ func (c *Client) Summarize(ctx context.Context, prompt, existing string, msgs []
 	return c.complete(ctx, c.summary, messages)
 }
 
-// News generates a chat news issue over the summary chain, which is sized for
-// the large context a full day of history needs. system carries the issue
-// instructions, user the chat log.
-func (c *Client) News(ctx context.Context, system, user string) (string, error) {
+// Winner generates the daily draw announcement over the summary chain, which is
+// sized for the large context a full day of history needs. system carries the
+// announcement instructions, user the draw data and the chat log.
+func (c *Client) Winner(ctx context.Context, system, user string) (string, error) {
 	return c.complete(ctx, c.summary, []chatMessage{
 		newMessage("system", system),
 		newMessage("user", user),

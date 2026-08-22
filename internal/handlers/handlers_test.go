@@ -10,7 +10,6 @@ import (
 
 	"shizoid/internal/app"
 	"shizoid/internal/config"
-	"shizoid/internal/handlers/news"
 )
 
 func TestUpdateKind(t *testing.T) {
@@ -98,7 +97,7 @@ func TestIsMentioned(t *testing.T) {
 }
 
 func TestCommandsUnique(t *testing.T) {
-	cmds := buildCommands(true)
+	cmds := buildCommands()
 	seen := make(map[string]struct{}, len(cmds))
 	for _, c := range cmds {
 		assert.NotEmpty(t, c.name)
@@ -107,34 +106,6 @@ func TestCommandsUnique(t *testing.T) {
 		_, dup := seen[c.name]
 		assert.False(t, dup, "duplicate command %q", c.name)
 		seen[c.name] = struct{}{}
-	}
-}
-
-// /news generates its issue over the neural summary chain, so it must not be
-// registered at all when no summary provider is configured: no handler and no
-// entry in the published Telegram command menu.
-func TestNewsCommandGatedOnSummaryChain(t *testing.T) {
-	has := func(cmds []command, name string) bool {
-		for _, c := range cmds {
-			if c.name == name {
-				return true
-			}
-		}
-		return false
-	}
-
-	withNews := buildCommands(true)
-	assert.True(t, has(withNews, news.Command))
-
-	withoutNews := buildCommands(false)
-	assert.False(t, has(withoutNews, news.Command))
-
-	// only /news is gated; every other command stays registered
-	assert.Len(t, withoutNews, len(withNews)-1)
-	for _, c := range withNews {
-		if c.name != news.Command {
-			assert.True(t, has(withoutNews, c.name), "command %q must not be gated", c.name)
-		}
 	}
 }
 
