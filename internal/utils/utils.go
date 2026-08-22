@@ -44,7 +44,7 @@ func MatchesLeadingCommand(text, name, botUsername string) bool {
 }
 
 // CutSubcommand splits a command payload into a lowercased verb and the rest,
-// e.g. "/news enable sport" yields ("enable", "sport"). Commands whose
+// e.g. "/winner enable Флудер" yields ("enable", "Флудер"). Commands whose
 // permission depends on the verb parse their payload this way.
 func CutSubcommand(update *models.Update) (verb, rest string) {
 	verb, rest, _ = strings.Cut(strings.TrimSpace(ExtractCommandPayloadText(update)), " ")

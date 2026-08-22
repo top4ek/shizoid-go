@@ -74,6 +74,7 @@ type Store struct {
 	Winners        winners
 	Greetings      greetings
 	Ingest         ingest
+	SummaryJobs    summaryJobs
 }
 
 // NewStore wires all repositories to the given pool.
@@ -89,6 +90,7 @@ func NewStore(pool *pgxpool.Pool) *Store {
 		Winners:        winners{db: pool},
 		Greetings:      greetings{db: pool},
 		Ingest:         ingest{pool: pool},
+		SummaryJobs:    summaryJobs{db: pool},
 	}
 }
 

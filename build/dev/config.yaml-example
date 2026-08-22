@@ -27,12 +27,12 @@ app:
   generation_mode: neural
   winner_cron: "20 1 * * *"
   memory_cron: "0 */3 * * *"
-  news_cron: "40 4 * * *" # daily joke news issue, 04:40 UTC
+  summary_queue_cron: "@every 1m"
   # prompts: named blocks the system prompts are assembled from. Each block
   # falls back to a built-in default when omitted. Assembly order is fixed in
   # code (internal/config/prompts.go):
   #   reply   = chat_role + chat_memory + chat_format + telegram_markup + chat_length + precedence
-  #   news    = news_role + news_source + news_format + telegram_markup + news_tone + precedence
+  #   winner  = winner_role + winner_data + winner_format + telegram_markup + winner_tone + precedence
   #   summary = summary_role + summary_rules + summary_format
   # prompts:
   #   telegram_markup: |
@@ -40,7 +40,8 @@ app:
   #     - Only plain text, no markup at all.
 
 # Neural provider fallback chains. Each list is tried top to bottom until a
-# provider answers. reply: chat replies (tried before Markov fallback). summary: long-term memory cron.
+# provider answers. reply: chat replies (tried before Markov fallback). summary: long-term memory
+# cron and the daily winner announcement.
 neural:
   reply:
     - name: openrouter

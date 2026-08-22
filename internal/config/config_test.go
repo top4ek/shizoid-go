@@ -119,8 +119,7 @@ telegram:
 	assert.Equal(t, "production", Sentry.Environment)
 	assert.NotEmpty(t, Environment.AppPrompt)
 	assert.NotEmpty(t, Environment.SummaryPrompt)
-	assert.NotEmpty(t, Environment.NewsPrompt)
-	assert.Equal(t, "40 4 * * *", Environment.NewsCron)
+	assert.NotEmpty(t, Environment.WinnerPrompt)
 }
 
 func TestLoadRequiresToken(t *testing.T) {

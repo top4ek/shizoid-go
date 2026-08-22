@@ -23,7 +23,6 @@ import (
 	"shizoid/internal/handlers/ids"
 	"shizoid/internal/handlers/lang"
 	"shizoid/internal/handlers/me"
-	"shizoid/internal/handlers/news"
 	"shizoid/internal/handlers/ping"
 	"shizoid/internal/handlers/prompt"
 	"shizoid/internal/handlers/say"
@@ -55,14 +54,12 @@ type command struct {
 }
 
 func commands() []command {
-	return buildCommands(app.Neural().SummaryConfigured())
+	return buildCommands()
 }
 
-// buildCommands lists the registered commands. /news is included only when a
-// neural summary chain is configured, since that is the chain it generates
-// issues over; without it the command would sit in the menu doing nothing.
-func buildCommands(newsEnabled bool) []command {
-	cmds := []command{
+// buildCommands lists the registered commands.
+func buildCommands() []command {
+	return []command{
 		{name: eightball.Command, description: eightball.Description, handler: eightball.Handler},
 		{name: gab.Command, description: gab.Description, handler: gab.Handler,
 			role: roleAdmin, replyOnDeny: true, needsEnabled: true},
@@ -90,11 +87,6 @@ func buildCommands(newsEnabled bool) []command {
 		{name: winner.Command, description: winner.Description, handler: winner.Handler,
 			needsEnabled: true},
 	}
-	if newsEnabled {
-		cmds = append(cmds, command{name: news.Command, description: news.Description, handler: news.Handler,
-			needsEnabled: true})
-	}
-	return cmds
 }
 
 // gate enforces the command's declared requirements once, so handlers do not

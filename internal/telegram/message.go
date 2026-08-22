@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"context"
+	"errors"
 	"time"
 	"unicode/utf8"
 
@@ -14,7 +15,9 @@ import (
 	"shizoid/internal/sentry"
 )
 
-const maxMessageRunes = 4096
+// MaxMessageRunes is Telegram's per-message limit. Text over it is cut, so a
+// caller that assembles a message out of blocks has to budget against it.
+const MaxMessageRunes = 4096
 
 // ChatMessageOpts configures outbound chat messages.
 type ChatMessageOpts struct {
@@ -124,27 +127,55 @@ func SendToChat(ctx context.Context, b *bot.Bot, chatID int64, text string, opts
 }
 
 func prepareOutboundText(text string) string {
+	return FitV2(text, MaxMessageRunes)
+}
+
+// FitV2 sanitizes text as MarkdownV2 and cuts it until the sanitized result fits
+// maxRunes. The cut is on the raw text and stepped down proportionally: escaping
+// grows the text by an amount only the sanitizer knows, so where the raw cut has
+// to fall cannot be computed in one go.
+func FitV2(text string, maxRunes int) string {
+	if maxRunes <= 0 {
+		return ""
+	}
 	out := SanitizeV2(text)
-	if utf8.RuneCountInString(out) <= maxMessageRunes {
+	if utf8.RuneCountInString(out) <= maxRunes {
 		return out
 	}
 	raw := []rune(text)
-	limit := maxMessageRunes
+	limit := maxRunes
 	if limit > len(raw) {
 		limit = len(raw)
 	}
 	for {
 		out = SanitizeV2(string(raw[:limit]))
 		n := utf8.RuneCountInString(out)
-		if n <= maxMessageRunes || limit == 0 {
+		if n <= maxRunes || limit == 0 {
 			return out
 		}
-		next := limit * maxMessageRunes / n
+		next := limit * maxRunes / n
 		if next >= limit {
 			next = limit - 1
 		}
 		limit = next
 	}
+}
+
+// IsPermanentError reports whether the Telegram API refused a call for a reason
+// retrying cannot fix: the bot was removed, the chat is gone or was migrated,
+// the request itself is malformed. Callers that own a retry loop drop the work
+// instead of spending the rest of its lifetime on the same answer.
+func IsPermanentError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if bot.IsMigrateError(err) {
+		return true
+	}
+	return errors.Is(err, bot.ErrorForbidden) ||
+		errors.Is(err, bot.ErrorBadRequest) ||
+		errors.Is(err, bot.ErrorUnauthorized) ||
+		errors.Is(err, bot.ErrorNotFound)
 }
 
 func persistBotMessage(ctx context.Context, chatID int64, text string) {

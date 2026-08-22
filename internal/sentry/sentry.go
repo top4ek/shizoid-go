@@ -31,7 +31,16 @@ func Init() {
 		Release:     release,
 		// Chat messages are PII; never attach user identity or request
 		// payloads to events.
-		SendDefaultPII: false,
+		DataCollection: &sentry.DataCollection{
+			UserInfo:   sentry.Set(false),
+			HTTPBodies: []sentry.BodyType{},
+			Cookies:    &sentry.KeyValueCollectionBehavior{Mode: sentry.CollectionOff},
+			HTTPHeaders: &sentry.HeaderCollectionConfig{
+				Request:  &sentry.KeyValueCollectionBehavior{Mode: sentry.CollectionOff},
+				Response: &sentry.KeyValueCollectionBehavior{Mode: sentry.CollectionOff},
+			},
+			QueryParams: &sentry.KeyValueCollectionBehavior{Mode: sentry.CollectionOff},
+		},
 		BeforeSend: func(event *sentry.Event, _ *sentry.EventHint) *sentry.Event {
 			event.User = sentry.User{}
 			event.Request = nil

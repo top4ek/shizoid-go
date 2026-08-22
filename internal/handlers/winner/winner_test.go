@@ -55,3 +55,22 @@ func TestFormatWinnerUser_EmptyNameUsesDefault(t *testing.T) {
 		assert.Contains(t, got, bot.EscapeMarkdown(locale.T(lang, "winner.default")))
 	}
 }
+
+// A chat that has never had a draw would otherwise get a bare "top of the year"
+// header with no rows under it.
+func TestYearBlockIsEmptyWithoutWinners(t *testing.T) {
+	assert.Equal(t, "", yearBlock("ru", nil))
+	assert.Equal(t, "head", joinBlock("head", yearBlock("ru", nil)))
+
+	block := yearBlock("ru", []models.ScoreEntry{{UserID: 1, Name: "alice", Score: 2}})
+	assert.Contains(t, block, "alice")
+	assert.Equal(t, "head\n\n"+block, joinBlock("head", block))
+}
+
+// Without a model the announcement is only the result line, so the separator
+// must not be prepended to it.
+func TestJoinBlockSkipsEmptySides(t *testing.T) {
+	assert.Equal(t, "result", joinBlock("", "result"))
+	assert.Equal(t, "ceremony", joinBlock("ceremony", ""))
+	assert.Equal(t, "", joinBlock("", ""))
+}

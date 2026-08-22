@@ -57,12 +57,15 @@ type appConfig struct {
 	CaptchaCron    string  `yaml:"captcha_cron" env:"CAPTCHA_CRON" env-default:"@every 1m"`
 
 	MemoryCron string `yaml:"memory_cron" env:"MEMORY_CRON" env-default:"0 */3 * * *"`
-	NewsCron   string `yaml:"news_cron" env:"NEWS_CRON" env-default:"40 4 * * *"`
+	// SummaryQueueCron is how often the deferred summary-chain work is drained.
+	// It runs often because it is the only thing that retries a job the model
+	// was too busy to take.
+	SummaryQueueCron string `yaml:"summary_queue_cron" env:"SUMMARY_QUEUE_CRON" env-default:"@every 1m"`
 
 	Prompts promptBlocks `yaml:"prompts" env-prefix:"PROMPT_"`
 
 	AppPrompt     string `yaml:"-"`
-	NewsPrompt    string `yaml:"-"`
+	WinnerPrompt  string `yaml:"-"`
 	SummaryPrompt string `yaml:"-"`
 }
 
@@ -73,10 +76,10 @@ type promptBlocks struct {
 	ChatLength     string `yaml:"chat_length" env:"CHAT_LENGTH"`
 	TelegramMarkup string `yaml:"telegram_markup" env:"TELEGRAM_MARKUP"`
 	Precedence     string `yaml:"precedence" env:"PRECEDENCE"`
-	NewsRole       string `yaml:"news_role" env:"NEWS_ROLE"`
-	NewsSource     string `yaml:"news_source" env:"NEWS_SOURCE"`
-	NewsFormat     string `yaml:"news_format" env:"NEWS_FORMAT"`
-	NewsTone       string `yaml:"news_tone" env:"NEWS_TONE"`
+	WinnerRole     string `yaml:"winner_role" env:"WINNER_ROLE"`
+	WinnerData     string `yaml:"winner_data" env:"WINNER_DATA"`
+	WinnerFormat   string `yaml:"winner_format" env:"WINNER_FORMAT"`
+	WinnerTone     string `yaml:"winner_tone" env:"WINNER_TONE"`
 	SummaryRole    string `yaml:"summary_role" env:"SUMMARY_ROLE"`
 	SummaryRules   string `yaml:"summary_rules" env:"SUMMARY_RULES"`
 	SummaryFormat  string `yaml:"summary_format" env:"SUMMARY_FORMAT"`

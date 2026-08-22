@@ -14,7 +14,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"shizoid/internal/config"
-	"shizoid/internal/locale"
 	"shizoid/internal/logger"
 )
 
@@ -34,11 +33,6 @@ telegram:
   token: "123:ABC"
 `), 0o600))
 	require.NoError(t, config.Load(path))
-}
-
-func TestWinnerLabel(t *testing.T) {
-	assert.Equal(t, locale.T("ru", "winner.default"), winnerLabel("", "ru"))
-	assert.Equal(t, "daily", winnerLabel("daily", "ru"))
 }
 
 func TestSummaryMessageBudget(t *testing.T) {

@@ -26,9 +26,38 @@ WARNING: neuroslop ahead (Opus and Composer are used).
 Migrations and locale strings are **embedded in the binary** at build time — you
 do not need to ship SQL or YAML files separately.
 
+### Summary queue
+
+Work that needs the `neural.summary` chain (the daily winner announcement and
+chat memory summarization) is never run inline, because the model it needs may
+be busy, rate-limited or down.
+Instead each unit of work is written to the `summary_jobs` table first, and a
+worker (`summary_queue_cron`, `@every 1m`) drains it:
+
+- One pending job per chat per kind.
+  Re-queueing the same kind replaces the pending one, so a fresh draw supersedes
+  a stale one rather than queueing behind it.
+- A failed job is retried with exponential backoff - 1m, 2m, 4m, 8m, 16m, then
+  every 30m - and one failure stops the rest of the drain, since the chain is a
+  single backend and the jobs behind it would only rediscover the same outage.
+- Claiming a job leases it for 10 minutes rather than removing it, so a crash
+  mid-job makes it due again instead of losing it.
+- A job is only ever given up on when it expires (48 h for an announcement, 24 h
+  for a memory summary), which is logged at `error`.
+
+Consequences worth knowing:
+
+- The winner announcement waits **as a whole**: with a summary chain configured
+  nothing is posted at 01:20 if the model is unreachable, and the full message
+  (ceremony, result line and year table) goes out when it answers.
+  Without a summary chain the plain announcement is posted immediately as before.
+- While a summary chain is configured, the daily message prune keeps everything
+  newer than `chats.memory_summarized_at`, so a long outage cannot delete history
+  before the summarizer has read it.
+
 ## Requirements
 
-- Go 1.26+
+- Go 1.27+
 - PostgreSQL 18+ (uses `UNIQUE NULLS NOT DISTINCT`); the app connects via [pgx](https://github.com/jackc/pgx)
 - Docker (optional: production deployment and integration tests)
 
@@ -48,16 +77,16 @@ and [`build/dev/config.yaml-example`](build/dev/config.yaml-example) for local d
 | `app` | `generation_mode` | `neural` | Default mode for new chats |
 | `app` | `bind_to` | `3000` | Webhook/health HTTP port (prod example uses `8095`) |
 | `app` | `locale` | `ru` | Default locale for new chats |
-| `app` | `winner_cron` | `20 1 * * *` | Daily winner draw (01:20) |
+| `app` | `winner_cron` | `20 1 * * *` | Daily winner draw (01:20); the announcement is written by the `summary` chain when one is configured, and queued until it answers |
 | `app` | `captcha_cron` | `@every 1m` | Expiry sweep for pending captchas |
-| `app` | `memory_cron` | `0 */3 * * *` | Memory summarization for all active chats (messages since last `memory_summarized_at`) |
-| `app` | `news_cron` | `40 4 * * *` | Daily joke news issue (04:40 UTC) for chats with `/news` enabled |
+| `app` | `memory_cron` | `0 */3 * * *` | Queues memory summarization for all active chats (messages since last `memory_summarized_at`) |
+| `app` | `summary_queue_cron` | `@every 1m` | Drains the deferred `summary` chain work (see [Summary queue](#summary-queue)) |
 | `app` | `allow_to_all` | `false` | Reply in all chats without `/start` |
 | `app` | `prompts.*` | see example | Named blocks the system prompts are assembled from; shared blocks (`chat_role`, `chat_format`, `chat_length`, `telegram_markup`, `precedence`) reach every prompt that uses them |
 | `telegram` | `webhook_url` | — | Webhook mode URL; empty = long polling (`deleteWebhook` on startup) |
 | `telegram` | `webhook_secret_token` | — | Secret for webhook requests (`setWebhook` + header check); auto-generated in webhook mode if omitted |
 | `sentry` | `dsn` | — | Enables Sentry when set |
-| `neural` | `reply` / `summary` | — | Provider fallback chains for LLM replies and for memory summarization plus news issues |
+| `neural` | `reply` / `summary` | — | Provider fallback chains for LLM replies and for memory summarization plus the daily winner announcement |
 | `neural.*` | `context_size` | — | Per-model UTF-8 byte budget for API payload; max across `reply` caps DB history; max across `summary` caps memory input |
 | `neural.*` | `sampling` | — | Optional chat/completions sampling (`temperature`, `top_p`, `top_k`, `min_p`, `presence_penalty`, `repetition_penalty`; sent as `repeat_penalty` to llama.cpp) |
 
@@ -73,6 +102,11 @@ without any warning. Check a deployed `config.yaml` when upgrading past this cha
 | `summary_prompt` / `APP_SUMMARY_PROMPT` | `app.prompts.summary_role`, `summary_rules`, `summary_format` |
 | `idle_prompt` / `APP_IDLE_PROMPT` | none — the idle/poke feature was removed |
 | `idle_cron` / `APP_IDLE_CRON` | none — the idle/poke feature was removed |
+| `news_cron` / `APP_NEWS_CRON` | none — the daily news issue was removed |
+| `prompts.news_role` / `APP_PROMPT_NEWS_ROLE` | `app.prompts.winner_role` |
+| `prompts.news_source` / `APP_PROMPT_NEWS_SOURCE` | `app.prompts.winner_data` |
+| `prompts.news_format` / `APP_PROMPT_NEWS_FORMAT` | `app.prompts.winner_format` |
+| `prompts.news_tone` / `APP_PROMPT_NEWS_TONE` | `app.prompts.winner_tone` |
 
 Pass `-config path/to/config.yaml` if the file is not named `config.yaml`.
 

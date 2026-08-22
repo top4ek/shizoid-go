@@ -36,13 +36,25 @@ func (r messages) ChatIDs(ctx context.Context) ([]int64, error) {
 // PruneChatByBytes keeps the newest keepBytes of history for one chat. Pruning
 // per chat keeps the window scan bounded by a single chat's history instead of
 // the whole table.
-func (r messages) PruneChatByBytes(ctx context.Context, chatID int64, keepBytes int) (int64, error) {
+//
+// keepUnsummarized additionally spares everything the memory summarizer has not
+// read yet, so a model outage lasting longer than a prune cycle cannot delete
+// history before it is summarized. Callers must leave it off when memory
+// summarization is not running at all: memory_summarized_at would never advance
+// and the table would grow without bound.
+func (r messages) PruneChatByBytes(ctx context.Context, chatID int64, keepBytes int, keepUnsummarized bool) (int64, error) {
 	if keepBytes <= 0 {
 		return 0, nil
 	}
+	summarized := ``
+	if keepUnsummarized {
+		summarized = ` AND created_at <= COALESCE(
+				(SELECT memory_summarized_at FROM chats WHERE id = $1),
+				'-infinity'::timestamptz)`
+	}
 	res, err := r.db.Exec(ctx, `
 		DELETE FROM messages
-		WHERE chat_id = $1 AND id IN (
+		WHERE chat_id = $1`+summarized+` AND id IN (
 			SELECT id FROM (
 				SELECT id,
 					SUM(octet_length(text)) OVER (

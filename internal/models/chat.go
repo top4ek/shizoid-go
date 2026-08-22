@@ -26,7 +26,6 @@ type Chat struct {
 	SystemPrompt       sql.NullString `db:"system_prompt"`
 	Memory             sql.NullString `db:"memory"`
 	MemorySummarizedAt sql.NullTime   `db:"memory_summarized_at"`
-	News               sql.NullString `db:"news"`
 }
 
 type chats struct{ db DBTX }
@@ -41,13 +40,6 @@ func (c *Chat) WinnerEnabled() bool {
 	return c.Winner.Valid && c.Winner.String != ""
 }
 
-// NewsEnabled reports whether the daily news issue is configured. The stored
-// value is the issue style ("sport", "general news", a tone), so an empty or
-// NULL value means the issue is off for this chat.
-func (c *Chat) NewsEnabled() bool {
-	return c.News.Valid && c.News.String != ""
-}
-
 // CaptchaEnabled reports whether captcha is active for new members.
 func (c *Chat) CaptchaEnabled() bool {
 	return c.CaptchaEnabledAt.Valid
@@ -55,14 +47,14 @@ func (c *Chat) CaptchaEnabled() bool {
 
 const chatColumns = `id, kind, random, greeting, winner, locale, generation_mode,
 	title, first_name, last_name, username, active_at,
-	captcha_enabled_at, system_prompt, memory, memory_summarized_at, news`
+	captcha_enabled_at, system_prompt, memory, memory_summarized_at`
 
 func scanChat(row interface{ Scan(...any) error }) (*Chat, error) {
 	c := &Chat{}
 	err := row.Scan(
 		&c.ID, &c.Kind, &c.Random, &c.Greeting, &c.Winner, &c.Locale, &c.GenerationMode,
 		&c.Title, &c.FirstName, &c.LastName, &c.Username, &c.ActiveAt,
-		&c.CaptchaEnabledAt, &c.SystemPrompt, &c.Memory, &c.MemorySummarizedAt, &c.News,
+		&c.CaptchaEnabledAt, &c.SystemPrompt, &c.Memory, &c.MemorySummarizedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -128,11 +120,6 @@ func (r chats) SetSystemPrompt(ctx context.Context, id int64, prompt sql.NullStr
 
 func (r chats) SetMemory(ctx context.Context, id int64, memory sql.NullString) error {
 	_, err := r.db.Exec(ctx, `UPDATE chats SET memory = $2 WHERE id = $1`, id, memory)
-	return err
-}
-
-func (r chats) SetNews(ctx context.Context, id int64, style sql.NullString) error {
-	_, err := r.db.Exec(ctx, `UPDATE chats SET news = $2 WHERE id = $1`, id, style)
 	return err
 }
 
