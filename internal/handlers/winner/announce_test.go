@@ -160,12 +160,12 @@ func TestAnnouncementRoundTripsThroughJSON(t *testing.T) {
 	assert.Equal(t, want, got)
 }
 
-// Deliver puts the ceremony above the committed result, and an unconfigured
+// Deliver folds the ceremony under the committed result, and an unconfigured
 // chain is not a failure: the result still goes out on its own.
-func TestJoinBlockPlacesTheCeremonyAboveTheResult(t *testing.T) {
+func TestJoinBlockPlacesTheCeremonyUnderTheResult(t *testing.T) {
 	a := announcement{Result: "Пиздаболом дня стал вася"}
-	assert.Equal(t, a.Result, joinBlock("", a.Result))
-	assert.Equal(t, "ceremony\n\n"+a.Result, joinBlock("ceremony", a.Result))
+	assert.Equal(t, a.Result, joinBlock(a.Result, ""))
+	assert.Equal(t, a.Result+"\n\nceremony", joinBlock(a.Result, "ceremony"))
 }
 
 // A model that never answers must not swallow the announcement: past the
@@ -181,17 +181,42 @@ func TestCeremonyDueOnlyWithinTheBudget(t *testing.T) {
 	assert.False(t, ceremonyDue(expiresAt, now.Add(announcementTTL)))
 }
 
-// The message is cut at its end, and the result block is what sits there: a
-// model that ignores the length instruction must not push the winner line out.
+// The ceremony is worth one read: it ships collapsed under the result, so the
+// winner line and the year table are what the chat sees without tapping.
+func TestFitCeremonyFoldsTheCeremonyIntoAnExpandableQuote(t *testing.T) {
+	const result = "Пиздаболом дня стал вася\n\nТоп года:\n*1\\.* вася — 3"
+
+	quote := fitCeremony("первая строка\nвторая строка", result)
+	got := joinBlock(result, quote)
+
+	assert.Equal(t, "**>первая строка\n>вторая строка||", quote)
+	assert.True(t, strings.HasPrefix(got, result), "the result block leads the message")
+	assert.NoError(t, telegram.ValidateV2(got))
+}
+
+// Without a ceremony there is no quote to show, not an empty one.
+func TestFitCeremonyIsEmptyWithoutACeremony(t *testing.T) {
+	const result = "Пиздаболом дня стал вася"
+
+	assert.Empty(t, fitCeremony("", result))
+	assert.Empty(t, fitCeremony("  \n ", result))
+	assert.Equal(t, result, joinBlock(result, fitCeremony("", result)))
+}
+
+// The message is cut at its end, and the ceremony quote is what sits there: a
+// model that ignores the length instruction must not have its quote cut open,
+// which would drop the closing mark and unfold the whole thing.
 func TestFitCeremonyLeavesRoomForTheResultBlock(t *testing.T) {
 	const result = "Пиздаболом дня стал вася\n\nТоп года:\n*1\\.* вася — 3"
-	long := strings.Repeat("а вот и церемония. ", 1000)
+	long := strings.Repeat("а вот и церемония.\n", 1000)
 
-	got := joinBlock(fitCeremony(long, result), result)
+	got := joinBlock(result, fitCeremony(long, result))
 
 	assert.LessOrEqual(t, utf8.RuneCountInString(got), telegram.MaxMessageRunes)
-	assert.True(t, strings.HasSuffix(got, result), "the result block must survive the cut whole")
+	assert.True(t, strings.HasPrefix(got, result), "the result block must survive the cut whole")
+	assert.True(t, strings.HasSuffix(got, "||"), "the quote keeps its expandability mark")
 	assert.NoError(t, telegram.ValidateV2(got))
+	assert.Equal(t, got, telegram.FitV2(got, telegram.MaxMessageRunes), "the send path must not cut the quote")
 }
 
 // The result block is already MarkdownV2. Sanitizing it together with the raw
@@ -199,7 +224,7 @@ func TestFitCeremonyLeavesRoomForTheResultBlock(t *testing.T) {
 func TestFitCeremonyEscapesTheModelsMarkersOnItsOwn(t *testing.T) {
 	const result = "Пиздаболом дня стал вася\n\nТоп года:\n*1\\.* вася — 3"
 
-	got := joinBlock(fitCeremony("вася набрал 5 * 5 очков", result), result)
+	got := joinBlock(result, fitCeremony("вася набрал 5 * 5 очков", result))
 
 	assert.Contains(t, got, `5 \* 5`)
 	assert.Contains(t, got, `*1\.*`, "the result block's own markup is untouched")

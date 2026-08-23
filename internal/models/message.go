@@ -185,12 +185,14 @@ func (r messages) RecentTextsByBytes(ctx context.Context, chatID int64, maxBytes
 
 // TextsSinceByBytes returns the texts at or after since that fit maxBytes, in
 // chronological order. Unlike the others it has no single-row fallback: the
-// summarizer treats an empty window as "nothing new to summarize".
+// summarizer treats an empty window as "nothing new to summarize". A zero since
+// asks for the whole history, which is what a chat that was never summarized
+// does, so the time bound has to go with the argument budgetArgs drops.
 func (r messages) TextsSinceByBytes(ctx context.Context, chatID int64, since time.Time, maxBytes int) ([]string, error) {
 	if maxBytes <= 0 {
 		return nil, nil
 	}
 	return queryRows(ctx, r.db,
-		byteBudgetedQuery(`text`, `m.text`, ``, true, `ASC`),
+		byteBudgetedQuery(`text`, `m.text`, ``, !since.IsZero(), `ASC`),
 		budgetArgs(chatID, since, maxBytes), scanText)
 }

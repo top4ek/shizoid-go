@@ -39,6 +39,22 @@ func FormatPlain(s string) string {
 	return bot.EscapeMarkdown(s)
 }
 
+// QuoteExpandableV2 folds already sanitized MarkdownV2 text into an expandable
+// blockquote: Telegram marks one with '**' before its first '>' line and '||'
+// at the end of its last, and renders it collapsed until the reader taps it.
+// Blank text yields no quote, so a caller with nothing to quote emits no empty
+// block.
+func QuoteExpandableV2(text string) string {
+	if strings.TrimSpace(text) == "" {
+		return ""
+	}
+	lines := strings.Split(text, "\n")
+	for i, line := range lines {
+		lines[i] = ">" + line
+	}
+	return "**" + strings.Join(lines, "\n") + "||"
+}
+
 func parseV2(s string, sanitize bool) (string, error) {
 	p := &mdParser{rs: []rune(s), sanitize: sanitize}
 	if err := p.parsePlain(); err != nil {
@@ -69,6 +85,12 @@ func (p *mdParser) parsePlain() error {
 			p.out.WriteRune(p.rs[p.i+1])
 			p.i += 2
 			continue
+		}
+		if p.atLineStart() {
+			if quote, ok := p.parseQuote(); ok {
+				p.out.WriteString(quote)
+				continue
+			}
 		}
 		if consumed, ok := p.tryEntity(); ok {
 			p.out.WriteString(consumed)
@@ -132,6 +154,113 @@ func (p *mdParser) tryEntity() (string, bool) {
 	}
 	p.i = start
 	return "", false
+}
+
+func (p *mdParser) atLineStart() bool {
+	return p.i == 0 || p.rs[p.i-1] == '\n'
+}
+
+// parseQuote consumes one blockquote: a run of lines each opened with '>',
+// ended by the first line that is not. A '**' before the first line and an
+// unescaped '||' at the end of the last mark the quote expandable. A quote
+// opened as expandable but left unclosed - a cut lands there, say - is kept as
+// a plain quote rather than dropped back to escaped '>' text.
+func (p *mdParser) parseQuote() (string, bool) {
+	start := p.i
+	expandable := p.hasPrefix("**>")
+	if expandable {
+		p.i += 2
+	}
+	if p.i >= len(p.rs) || p.rs[p.i] != '>' {
+		p.i = start
+		return "", false
+	}
+	lines := p.quoteLines()
+	if expandable {
+		last := len(lines) - 1
+		if body, ok := cutExpandMark(lines[last]); ok {
+			lines[last] = body
+		} else {
+			expandable = false
+		}
+	}
+	body, err := parseV2(strings.Join(lines, "\n"), p.sanitize)
+	if err != nil || strings.TrimSpace(body) == "" {
+		p.i = start
+		return "", false
+	}
+	var b strings.Builder
+	if expandable {
+		b.WriteString("**")
+	}
+	for i, line := range strings.Split(body, "\n") {
+		if i > 0 {
+			b.WriteRune('\n')
+		}
+		b.WriteRune('>')
+		b.WriteString(line)
+	}
+	if expandable {
+		b.WriteString("||")
+	}
+	return b.String(), true
+}
+
+// quoteLines consumes the '>' lines of one quote and returns their bodies. The
+// newline that ends the quote is left behind for parsePlain to write out, so
+// the text under the quote keeps its own line.
+func (p *mdParser) quoteLines() []string {
+	var lines []string
+	for p.i < len(p.rs) && p.rs[p.i] == '>' {
+		p.i++
+		lineStart := p.i
+		for p.i < len(p.rs) && p.rs[p.i] != '\n' {
+			if p.rs[p.i] == '\\' && p.i+1 < len(p.rs) {
+				p.i += 2
+				continue
+			}
+			p.i++
+		}
+		lines = append(lines, string(p.rs[lineStart:p.i]))
+		if p.i+1 >= len(p.rs) || p.rs[p.i+1] != '>' {
+			break
+		}
+		p.i++
+	}
+	return lines
+}
+
+// cutExpandMark strips the '||' expandability mark off a quote's last line,
+// reporting whether the line carried an unescaped one. An odd run of
+// backslashes before the pair escapes it, which makes it the model's text
+// rather than markup.
+func cutExpandMark(line string) (string, bool) {
+	rs := []rune(line)
+	if len(rs) < 2 || rs[len(rs)-1] != '|' || rs[len(rs)-2] != '|' {
+		return line, false
+	}
+	slashes := 0
+	for i := len(rs) - 3; i >= 0 && rs[i] == '\\'; i-- {
+		slashes++
+	}
+	if slashes%2 == 1 {
+		return line, false
+	}
+	return string(rs[:len(rs)-2]), true
+}
+
+// hasPrefix reports whether the unread text opens with s.
+func (p *mdParser) hasPrefix(s string) bool {
+	rs := []rune(s)
+	if p.i+len(rs) > len(p.rs) {
+		return false
+	}
+	for j, r := range rs {
+		if p.rs[p.i+j] != r {
+			return false
+		}
+	}
+	return true
 }
 
 func (p *mdParser) parseDelimited(open, close string) (string, bool) {

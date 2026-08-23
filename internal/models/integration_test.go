@@ -230,6 +230,28 @@ func TestIntegrationMessagesByteWindows(t *testing.T) {
 
 }
 
+// A chat whose memory has never been summarized has no memory_summarized_at,
+// so the summarizer asks for everything with a zero since. The time bound has
+// to be dropped from the query then, not left as a placeholder nothing binds.
+func TestIntegrationMessagesTextsSinceNeverSummarized(t *testing.T) {
+	s := requireDB(t)
+	ctx := context.Background()
+	chat := seedChat(t, ctx)
+	userID := chat.ID + 500_000
+
+	require.NoError(t, s.Messages.Append(ctx, chat.ID, userID, "первое"))
+	require.NoError(t, s.Messages.Append(ctx, chat.ID, userID, "второе"))
+
+	texts, err := s.Messages.TextsSinceByBytes(ctx, chat.ID, time.Time{}, 10_000)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"первое", "второе"}, texts, "chronological order")
+
+	// a since bound still filters
+	texts, err = s.Messages.TextsSinceByBytes(ctx, chat.ID, time.Now().Add(time.Hour), 10_000)
+	require.NoError(t, err)
+	assert.Empty(t, texts)
+}
+
 func TestIntegrationMessagesPruneByBytes(t *testing.T) {
 	s := requireDB(t)
 	ctx := context.Background()

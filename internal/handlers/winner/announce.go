@@ -41,7 +41,7 @@ const (
 )
 
 // announcement is the snapshot one draw is queued as: the prompt the model is
-// asked to run, and the deterministic text that goes under its answer. It has
+// asked to run, and the deterministic text its answer is folded under. It has
 // to be a snapshot because the inputs do not survive the wait - the draw resets
 // the day's scores and the prune trims the chat log it quotes.
 type announcement struct {
@@ -88,7 +88,7 @@ func Deliver(ctx context.Context, b *bot.Bot, chatID int64, payload []byte, expi
 		)
 		text = ""
 	}
-	err = send(ctx, b, chatID, joinBlock(fitCeremony(text, a.Result), a.Result))
+	err = send(ctx, b, chatID, joinBlock(a.Result, fitCeremony(text, a.Result)))
 	if err != nil && telegram.IsPermanentError(err) {
 		logger.Instance().Error("winner announcement dropped",
 			zap.Int64("chat_id", chatID),
@@ -107,20 +107,32 @@ func ceremonyDue(expiresAt, now time.Time) bool {
 	return now.Before(expiresAt.Add(ceremonyBudget - announcementTTL))
 }
 
-// fitCeremony bounds the model's half of the announcement. The 4-8 sentence
-// limit is a prompt instruction the model is free to ignore, and the message is
-// cut at its end, so an unbounded ceremony would push the winner line, the
-// mention and the year leaderboard out of the message. The two halves are
-// sanitized apart as well: the result block is already MarkdownV2, and a stray
-// marker in the model's text must not pair with one of its markers.
+// fitCeremony bounds the model's half of the announcement and folds it into an
+// expandable quote: the ceremony is worth one read, so it ships collapsed under
+// the result rather than pushing it down. The 4-8 sentence limit is a prompt
+// instruction the model is free to ignore, so the ceremony is cut to what is
+// left of the message; the cut is taken before the quote is built, because a
+// cut through the quote would take its closing mark with it. Wrapping costs a
+// rune per line, which the fit gives back until the quote clears the ceiling.
+// The two halves are sanitized apart as well: the result block is already
+// MarkdownV2, and a stray marker in the model's text must not pair with one of
+// its markers.
 func fitCeremony(text, result string) string {
-	budget := telegram.MaxMessageRunes - utf8.RuneCountInString(result) - blockSeparatorRunes
-	return telegram.FitV2(text, budget)
+	ceiling := telegram.MaxMessageRunes - utf8.RuneCountInString(result) - blockSeparatorRunes
+	for fit := ceiling; fit > 0; {
+		quote := telegram.QuoteExpandableV2(telegram.FitV2(text, fit))
+		over := utf8.RuneCountInString(quote) - ceiling
+		if over <= 0 {
+			return quote
+		}
+		fit -= over
+	}
+	return ""
 }
 
 // render assembles both halves of an announcement: the prompt for the model and
-// the result block that goes under whatever it answers. The leaderboard is read
-// here, so a queued announcement reports the standings as of the draw.
+// the result block that whatever it answers is folded under. The leaderboard is
+// read here, so a queued announcement reports the standings as of the draw.
 func render(ctx context.Context, chat *models.Chat, chosen models.ScoreEntry, standings []models.ScoreEntry, now time.Time) announcement {
 	lang := chat.Locale
 	label := winnerLabel(chat.Winner.String, lang)
