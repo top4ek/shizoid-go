@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.4
 FROM golang:1.27-alpine AS builder
 
 WORKDIR /opt
@@ -11,13 +12,17 @@ RUN apk --no-cache --update add ca-certificates git
 
 ARG GIT_COMMIT=unknown
 
-COPY go.mod go.sum ./
-RUN go mod download && go mod verify
+COPY go.work ./
+COPY apps/shizoid/go.mod apps/shizoid/go.sum ./apps/shizoid/
+WORKDIR /opt/apps/shizoid
+RUN --mount=type=cache,target=/go/pkg/mod go mod download && go mod verify
 
+WORKDIR /opt
 COPY . .
 
-RUN go build -trimpath \
-  -ldflags="-s -w -X shizoid/internal/version.commit=${GIT_COMMIT}" \
+WORKDIR /opt/apps/shizoid
+RUN --mount=type=cache,target=/go/pkg/mod go build -trimpath \
+  -ldflags="-s -w -X apps/shizoid/internal/version.commit=${GIT_COMMIT}" \
   -o /shizoid ./cmd/app
 
 FROM scratch

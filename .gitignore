@@ -12,8 +12,6 @@ build/dev/config.yaml
 .git
 .idea/
 dev/.env
-go.work
-go.work.sum
 profile.cov
 tmp
 models/*

@@ -1,0 +1,152 @@
+package winner
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"strings"
+
+	"github.com/go-telegram/bot"
+	tgmodels "github.com/go-telegram/bot/models"
+	"go.uber.org/zap"
+
+	"apps/shizoid/internal/app"
+	"apps/shizoid/internal/locale"
+	"apps/shizoid/internal/logger"
+	"apps/shizoid/internal/models"
+	"apps/shizoid/internal/telegram"
+	"apps/shizoid/internal/utils"
+)
+
+const (
+	Command     = "winner"
+	Description = "Daily winner draw and stats"
+)
+
+func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
+	chat := app.ChatFrom(ctx)
+	if chat == nil {
+		return
+	}
+	lang := app.Locale(ctx)
+	verb, rest := utils.CutSubcommand(update)
+
+	switch verb {
+	case "enable":
+		enable(ctx, b, update, chat.ID, rest, lang)
+	case "disable":
+		disable(ctx, b, update, chat.ID, lang)
+	case "current":
+		telegram.Reply(ctx, b, update, currentStats(ctx, chat.ID, lang))
+	case "":
+		telegram.ReplyNoPreview(ctx, b, update, previousWinner(ctx, chat.ID, lang))
+	default:
+		telegram.Reply(ctx, b, update, locale.T(lang, "winner.usage"))
+	}
+}
+
+func enable(ctx context.Context, b *bot.Bot, update *tgmodels.Update, chatID int64, label, lang string) {
+	if !utils.RequireChatAdmin(ctx, b, update, lang) {
+		return
+	}
+	if label == "" {
+		label = locale.T(lang, "winner.default")
+	}
+	if err := app.Store().Chats.SetWinner(ctx, chatID, sql.NullString{String: label, Valid: true}); err != nil {
+		logger.Instance().Error("winner enable", zap.Error(err))
+		return
+	}
+	telegram.Reply(ctx, b, update, locale.T(lang, "winner.enabled", "name", telegram.FormatPlain(label)))
+}
+
+func disable(ctx context.Context, b *bot.Bot, update *tgmodels.Update, chatID int64, lang string) {
+	if !utils.RequireChatAdmin(ctx, b, update, lang) {
+		return
+	}
+	if err := app.Store().Chats.SetWinner(ctx, chatID, sql.NullString{}); err != nil {
+		logger.Instance().Error("winner disable", zap.Error(err))
+		return
+	}
+	telegram.Reply(ctx, b, update, locale.T(lang, "winner.turned_off"))
+}
+
+func currentStats(ctx context.Context, chatID int64, lang string) string {
+	entries, err := app.Store().Participations.TopByScore(ctx, chatID, 10)
+	if err != nil {
+		logger.Instance().Error("winner current", zap.Error(err))
+		return telegram.FormatPlain(locale.T(lang, "winner.no_one"))
+	}
+	if len(entries) == 0 {
+		return telegram.FormatPlain(locale.T(lang, "winner.no_one"))
+	}
+	return locale.T(lang, "winner.current", "top", FormatTop(lang, entries))
+}
+
+func previousWinner(ctx context.Context, chatID int64, lang string) string {
+	userID, username, name, ok, err := app.Store().Winners.LastWinner(ctx, chatID)
+	if err != nil {
+		logger.Instance().Error("winner last", zap.Error(err))
+	}
+	if !ok || name == "" {
+		return telegram.FormatPlain(locale.T(lang, "winner.no_one"))
+	}
+	entries, err := app.Store().Winners.TopOfYear(ctx, chatID, 10)
+	if err != nil {
+		logger.Instance().Error("winner top year", zap.Error(err))
+	}
+	chat := app.ChatFrom(ctx)
+	label := locale.T(lang, "winner.default")
+	if chat != nil && chat.Winner.Valid && chat.Winner.String != "" {
+		label = chat.Winner.String
+	}
+	return joinBlock(locale.T(lang, "winner.winner",
+		"name", telegram.FormatPlain(label),
+		"user", FormatWinnerUser(lang, userID, username, name)),
+		yearBlock(lang, entries))
+}
+
+// yearBlock renders the leaderboard of the year, or nothing at all: a chat
+// without a single recorded draw would otherwise get a bare header with no rows
+// under it.
+func yearBlock(lang string, entries []models.ScoreEntry) string {
+	if len(entries) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(locale.T(lang, "winner.year_top", "top", FormatTop(lang, entries)))
+}
+
+// joinBlock separates two announcement blocks by a blank line, skipping the
+// separator when either one is empty.
+func joinBlock(head, block string) string {
+	if head == "" {
+		return block
+	}
+	if block == "" {
+		return head
+	}
+	return head + "\n\n" + block
+}
+
+// FormatWinnerUser renders the daily winner as a MarkdownV2 user link.
+func FormatWinnerUser(lang string, userID int64, username, name string) string {
+	if name == "" {
+		name = locale.T(lang, "winner.default")
+	}
+	return utils.UserMarkdownLink(userID, username, name)
+}
+
+// FormatTop renders leaderboard entries into localized MarkdownV2 lines.
+func FormatTop(lang string, entries []models.ScoreEntry) string {
+	var lines []string
+	for i, e := range entries {
+		name := e.Name
+		if name == "" {
+			name = locale.T(lang, "winner.default")
+		}
+		lines = append(lines, fmt.Sprintf("*%s\\.* %s — %s",
+			telegram.FormatPlain(fmt.Sprint(i+1)),
+			telegram.FormatPlain(name),
+			telegram.FormatPlain(fmt.Sprint(e.Score))))
+	}
+	return strings.Join(lines, "\n")
+}

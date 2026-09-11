@@ -164,19 +164,19 @@ Official images are published to [Docker Hub](https://hub.docker.com/r/top4ek/sh
 
 ## Development (Docker)
 
-Developer commands are defined in [`Taskfile.yml`](Taskfile.yml) — the single source
-of truth, run locally and in CI via [Task](https://taskfile.dev). See `task --list`
-for everything available.
+Developer commands are defined in the [`Makefile`](Makefile) — the single source
+of truth, run locally and in CI via [GNU Make](https://www.gnu.org/software/make/).
+See `make help` for everything available.
 
 Hot reload with reflex + Delve debugger:
 
 ```bash
-task dev
+make dev
 ```
 
 On first run it copies `build/dev/.env-example` to `build/dev/.env` (and the container
 entrypoint copies `config.yaml-example` to `config.yaml`) — edit both with your values
-(`telegram.token`, `POSTGRES_*`, `LLAMA_ARG_*`). `task dev-down` stops the stack.
+(`telegram.token`, `POSTGRES_*`, `LLAMA_ARG_*`). `make dev-down` stops the stack.
 
 Without Task: `docker compose up --build` after copying the two files yourself.
 Docker infra (`postgres`, `llama`) uses `build/dev/.env` for `POSTGRES_*` and `LLAMA_ARG_*` variables.
@@ -185,7 +185,7 @@ Docker infra (`postgres`, `llama`) uses `build/dev/.env` for `POSTGRES_*` and `L
 
 ```bash
 cp build/dev/config.yaml-example build/dev/config.yaml
-go run ./cmd/app -config build/dev/config.yaml
+go run ./apps/shizoid/cmd/app -config build/dev/config.yaml
 ```
 
 ## Data migration (Ruby → Go)
@@ -242,32 +242,32 @@ When import runs as `postgres` but the bot connects as `shizoid`, pass
 Schema-only migration (no data import):
 
 ```bash
-go run ./cmd/app -config build/dev/config.yaml -migrate-only
+go run ./apps/shizoid/cmd/app -config build/dev/config.yaml -migrate-only
 ```
 
 ## Test
 
 ```bash
-task              # build + vet + test
-task test         # unit + integration (integration spins up Postgres via testcontainers, needs docker)
-task test-short   # unit tests only
-task ci           # everything CI runs: gofmt check, go vet, golangci-lint, go test -race, govulncheck
+make                # build + vet + test
+make test           # unit + integration (integration spins up Postgres via testcontainers, needs docker)
+make test-short     # unit tests only
+make ci             # everything CI runs: gofmt check, go vet, golangci-lint, go test -race, govulncheck
 ```
 
-CI runs the same task commands, so a green `task ci` locally means a green pipeline
-(`task lint-install` installs the pinned golangci-lint if you don't have it).
-Without Task: `go test ./...` / `go test -short ./...`.
+CI runs the same make targets, so a green `make ci` locally means a green pipeline
+(`make lint-install` installs the pinned golangci-lint if you don't have it).
+Without Make: `go test ./apps/shizoid/...` / `go test -short ./apps/shizoid/...`.
 
 In the dev container, `reflex` re-runs the package's tests on every file change.
 
 ## Develop
 
-- Handlers live in `internal/handlers/<name>`; register them in
-  `internal/handlers/handlers.go` and declare the required permission
+- Handlers live in `apps/shizoid/internal/handlers/<name>`; register them in
+  `apps/shizoid/internal/handlers/handlers.go` and declare the required permission
   (`roleEveryone`/`roleAdmin`/`roleOwner`) plus ready/enabled flags there —
   the registry gate enforces them centrally.
-- Data access is in `internal/models` (raw SQL over pgx, no ORM); repositories
-  hang off `models.Store`, reachable in handlers via `app.Store()`.
-- Text generation/learning is in `internal/generator`.
-- Localized strings are embedded YAML in `internal/locale/locales/`.
-- Schema changes: add a new goose migration in `internal/migrations/sql/`.
+- Data access is in `apps/shizoid/internal/models` (raw SQL over pgx, no ORM);
+  repositories hang off `models.Store`, reachable in handlers via `app.Store()`.
+- Text generation/learning is in `apps/shizoid/internal/generator`.
+- Localized strings are embedded YAML in `apps/shizoid/internal/locale/locales/`.
+- Schema changes: add a new goose migration in `apps/shizoid/internal/migrations/sql/`.

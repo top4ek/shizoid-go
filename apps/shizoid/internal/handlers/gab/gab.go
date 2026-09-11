@@ -1,0 +1,53 @@
+package gab
+
+import (
+	"context"
+	"fmt"
+	"strconv"
+	"strings"
+
+	"github.com/go-telegram/bot"
+	tgmodels "github.com/go-telegram/bot/models"
+	"go.uber.org/zap"
+
+	"apps/shizoid/internal/app"
+	"apps/shizoid/internal/locale"
+	"apps/shizoid/internal/logger"
+	"apps/shizoid/internal/telegram"
+	"apps/shizoid/internal/utils"
+)
+
+const (
+	Command     = "gab"
+	Description = "Show or set flood level (0-50, chat admins)"
+)
+
+func Handler(ctx context.Context, b *bot.Bot, update *tgmodels.Update) {
+	chat := app.ChatFrom(ctx)
+	if chat == nil {
+		return
+	}
+	lang := app.Locale(ctx)
+
+	payload := strings.TrimSpace(utils.ExtractCommandPayloadText(update))
+
+	if payload == "" {
+		telegram.Reply(ctx, b, update, levelText(lang, chat.Random))
+		return
+	}
+
+	value, err := strconv.Atoi(payload)
+	if err != nil || value < 0 || value > 50 {
+		telegram.Reply(ctx, b, update, locale.T(lang, "gab.error"))
+		return
+	}
+	if err := app.Store().Chats.SetRandom(ctx, chat.ID, value); err != nil {
+		logger.Instance().Error("set gab", zap.Error(err))
+		return
+	}
+	telegram.Reply(ctx, b, update, levelText(lang, int16(value)))
+}
+
+func levelText(lang string, chance int16) string {
+	return locale.T(lang, "gab.prefix") + " *" + telegram.FormatPlain(fmt.Sprint(chance)) + "%*\\."
+}
