@@ -1,6 +1,6 @@
 ---
 services:
-  app:
+  shizoid:
     build:
       context: .
       dockerfile: build/dev/Containerfile

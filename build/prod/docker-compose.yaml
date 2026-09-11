@@ -1,6 +1,6 @@
 ---
 services:
-  app:
+  shizoid:
     image: top4ek/shizoid-go:latest
     restart: unless-stopped
     depends_on:

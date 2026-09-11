@@ -41,7 +41,7 @@ usage() {
   sed -n '2,20p' "$0" >&2
   echo "  --apply          drop target DB, run goose, import generated SQL" >&2
   echo "  --apply-only     skip generation; only reset target DB and import --out" >&2
-  echo "  --binary PATH    shizoid binary for -migrate-only (default: go run ./cmd/app)" >&2
+  echo "  --binary PATH    shizoid binary for -migrate-only (default: go run ./apps/shizoid/cmd/app)" >&2
   echo "  --pg-container   run psql/dropdb/createdb via podman exec (import via podman cp)" >&2
   echo "  --grant-user     grant table access after import (app DB user)" >&2
   echo "  --app-config     read --grant-user from database.user in bot config" >&2
@@ -141,7 +141,7 @@ if [[ -z "$LEGACY_DSN" ]]; then
 fi
 
 if [[ -z "$BINARY" ]]; then
-  BINARY=(go run "$ROOT/cmd/app")
+  BINARY=(go run "$ROOT/apps/shizoid/cmd/app")
 else
   BINARY=("$BINARY")
 fi
