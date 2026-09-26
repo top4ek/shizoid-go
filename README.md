@@ -155,7 +155,7 @@ The running version (git commit) is shown in `/status`.
 **Build the image locally:**
 
 ```bash
-docker build -f build/prod/Containerfile \
+docker build --pull -f build/prod/Containerfile \
   --build-arg GIT_COMMIT=$(git rev-parse --short HEAD) \
   -t top4ek/shizoid-go .
 ```
@@ -179,6 +179,8 @@ entrypoint copies `config.yaml-example` to `config.yaml`) — edit both with you
 (`telegram.token`, `POSTGRES_*`, `LLAMA_ARG_*`). `make dev-down` stops the stack.
 
 Without Task: `docker compose up --build` after copying the two files yourself.
+To refresh the base OS and service images, use `docker compose build --pull`
+followed by `docker compose up --pull always`; `make dev` runs both commands.
 Docker infra (`postgres`, `llama`) uses `build/dev/.env` for `POSTGRES_*` and `LLAMA_ARG_*` variables.
 
 ## Run locally (without Docker)

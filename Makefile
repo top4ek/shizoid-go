@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-GOLANGCI_LINT_VERSION ?= v2.13.2
+GOLANGCI_LINT_VERSION ?= v2.14.0
 GO := go
 GOLANGCI_LINT := $(if $(shell command -v golangci-lint 2>/dev/null),$(shell command -v golangci-lint 2>/dev/null),$(shell $(GO) env GOPATH)/bin/golangci-lint)
 
@@ -34,7 +34,8 @@ lint-install: ## Install pinned golangci-lint
 
 dev: ## Run the dev stack in Docker (hot reload + Delve; postgres + llama)
 	test -f build/dev/.env || cp build/dev/.env-example build/dev/.env
-	docker compose up --build
+	docker compose build --pull
+	docker compose up --pull always
 
 dev-down: ## Stop the dev stack
 	docker compose down
