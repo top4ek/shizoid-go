@@ -73,6 +73,7 @@ jobs:
           context: .
           file: build/prod/Containerfile
           push: true
+          pull: true
           build-args: |
             GIT_COMMIT=${{ steps.version.outputs.short_sha }}
           tags: |
