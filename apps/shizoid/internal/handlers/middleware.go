@@ -115,6 +115,12 @@ func Ingest(next bot.HandlerFunc) bot.HandlerFunc {
 					return
 				}
 			}
+			if isLeaveTransition(cm.OldChatMember, cm.NewChatMember) {
+				if user, ok := memberUser(cm.NewChatMember); ok && !user.IsBot {
+					ingestLeave(ctx, b, update, chatModelFromChat(cm.Chat), user, next)
+					return
+				}
+			}
 			next(ctx, b, update)
 			return
 		}
@@ -129,6 +135,10 @@ func Ingest(next bot.HandlerFunc) bot.HandlerFunc {
 			ingestJoin(ctx, b, update, chatModel(msg), msg.NewChatMembers, "new_chat_members", next)
 			return
 		}
+		if msg.LeftChatMember != nil && !msg.LeftChatMember.IsBot {
+			ingestLeave(ctx, b, update, chatModel(msg), msg.LeftChatMember, next)
+			return
+		}
 
 		if msg.From == nil {
 			next(ctx, b, update)
@@ -137,9 +147,8 @@ func Ingest(next bot.HandlerFunc) bot.HandlerFunc {
 
 		chat := chatModel(msg)
 		user := models.UserFromTelegram(msg.From)
-		left := msg.LeftChatMember != nil && msg.LeftChatMember.ID == msg.From.ID
 
-		persistedChat, err := app.Store().Ingest.EnsureEntities(ctx, chat, user, left)
+		persistedChat, err := app.Store().Ingest.EnsureEntities(ctx, chat, user, false)
 		if err != nil {
 			logger.Instance().Error("ingest ensure", zap.Error(err))
 			next(ctx, b, update)
@@ -191,8 +200,34 @@ func ingestJoin(ctx context.Context, b *bot.Bot, update *tgmodels.Update, chat *
 		logger.Instance().Error("ingest join", zap.String("source", source), zap.Error(err))
 	} else if persisted != nil {
 		ctx = app.WithChat(ctx, persisted)
+		if persisted.Enabled() && persisted.WinnerEnabled() {
+			for _, member := range members {
+				if !member.IsBot {
+					incrScore(ctx, persisted.ID, member.ID, 1)
+				}
+			}
+		}
 	}
 	next(ctx, b, update)
+}
+
+func ingestLeave(ctx context.Context, b *bot.Bot, update *tgmodels.Update, chat *models.Chat, member *tgmodels.User, next bot.HandlerFunc) {
+	persisted, err := app.Store().Ingest.EnsureEntities(ctx, chat, models.UserFromTelegram(member), true)
+	if err != nil {
+		logger.Instance().Error("ingest leave", zap.Error(err))
+	} else {
+		ctx = app.WithChat(ctx, persisted)
+		if persisted.Enabled() && persisted.WinnerEnabled() {
+			incrScore(ctx, persisted.ID, member.ID, 1)
+		}
+	}
+	next(ctx, b, update)
+}
+
+func incrScore(ctx context.Context, chatID, userID int64, delta int) {
+	if err := app.Store().Participations.IncrScore(ctx, chatID, userID, delta); err != nil {
+		logger.Instance().Error("incr score", zap.Error(err))
+	}
 }
 
 func runCollectStats(chat *models.Chat, msg *tgmodels.Message) {
@@ -226,14 +261,18 @@ func collectStats(chat *models.Chat, msg *tgmodels.Message) {
 		}
 	}
 
-	if chat.WinnerEnabled() && msg.Text != "" {
-		delta := len(strings.Fields(msg.Text))
-		if delta > 0 {
-			if err := app.Store().Participations.IncrScore(bgCtx, chat.ID, msg.From.ID, delta); err != nil {
-				logger.Instance().Error("incr score", zap.Error(err))
-			}
-		}
+	if chat.WinnerEnabled() {
+		incrScore(bgCtx, chat.ID, msg.From.ID, messageScoreDelta(msg))
 	}
+}
+
+// messageScoreDelta gives a new message one point plus a point per word in its
+// text or media caption. Service member events are scored separately.
+func messageScoreDelta(msg *tgmodels.Message) int {
+	if isBotCommand(msg) {
+		return 0
+	}
+	return 1 + len(strings.Fields(msg.Text)) + len(strings.Fields(msg.Caption))
 }
 
 func chatModel(msg *tgmodels.Message) *models.Chat {

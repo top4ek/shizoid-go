@@ -38,6 +38,26 @@ func TestIsBotCommand(t *testing.T) {
 	assert.False(t, isBotCommand(&models.Message{Text: "hello"}))
 }
 
+func TestMessageScoreDelta(t *testing.T) {
+	tests := []struct {
+		name string
+		msg  models.Message
+		want int
+	}{
+		{"text", models.Message{Text: "два слова"}, 3},
+		{"whitespace", models.Message{Text: " \n "}, 1},
+		{"media only", models.Message{}, 1},
+		{"caption", models.Message{Caption: "три слова здесь"}, 4},
+		{"command", models.Message{Text: "/winner current"}, 0},
+		{"caption command", models.Message{Caption: "/ping"}, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, messageScoreDelta(&tt.msg))
+		})
+	}
+}
+
 func TestIsMentioned(t *testing.T) {
 	cases := []struct {
 		name     string
