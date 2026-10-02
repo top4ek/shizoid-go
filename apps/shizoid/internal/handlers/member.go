@@ -27,21 +27,33 @@ func ChatMemberHandler(ctx context.Context, b *bot.Bot, update *tgmodels.Update)
 }
 
 func isJoinTransition(old, new tgmodels.ChatMember) bool {
-	if !wasAbsent(old.Type) {
-		return false
-	}
-	switch new.Type {
-	case tgmodels.ChatMemberTypeMember:
+	return isAbsentMember(old) && isPresentMember(new)
+}
+
+func isLeaveTransition(old, new tgmodels.ChatMember) bool {
+	return isPresentMember(old) && isAbsentMember(new)
+}
+
+func isPresentMember(member tgmodels.ChatMember) bool {
+	switch member.Type {
+	case tgmodels.ChatMemberTypeMember, tgmodels.ChatMemberTypeAdministrator, tgmodels.ChatMemberTypeOwner:
 		return true
 	case tgmodels.ChatMemberTypeRestricted:
-		return new.Restricted != nil && new.Restricted.IsMember
+		return member.Restricted != nil && member.Restricted.IsMember
 	default:
 		return false
 	}
 }
 
-func wasAbsent(t tgmodels.ChatMemberType) bool {
-	return t == tgmodels.ChatMemberTypeLeft || t == tgmodels.ChatMemberTypeBanned
+func isAbsentMember(member tgmodels.ChatMember) bool {
+	switch member.Type {
+	case tgmodels.ChatMemberTypeLeft, tgmodels.ChatMemberTypeBanned:
+		return true
+	case tgmodels.ChatMemberTypeRestricted:
+		return member.Restricted != nil && !member.Restricted.IsMember
+	default:
+		return false
+	}
 }
 
 func memberUser(cm tgmodels.ChatMember) (*tgmodels.User, bool) {
@@ -55,7 +67,9 @@ func memberUser(cm tgmodels.ChatMember) (*tgmodels.User, bool) {
 			return cm.Restricted.User, true
 		}
 	case tgmodels.ChatMemberTypeAdministrator:
-		return &cm.Administrator.User, true
+		if cm.Administrator != nil {
+			return &cm.Administrator.User, true
+		}
 	case tgmodels.ChatMemberTypeOwner:
 		if cm.Owner != nil && cm.Owner.User != nil {
 			return cm.Owner.User, true
