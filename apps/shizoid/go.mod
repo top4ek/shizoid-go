@@ -4,9 +4,9 @@ go 1.27.1
 
 require (
 	github.com/getsentry/sentry-go v0.49.0
-	github.com/go-telegram/bot v1.25.0
+	github.com/go-telegram/bot v1.27.0
 	github.com/ilyakaznacheev/cleanenv v1.5.0
-	github.com/jackc/pgx/v5 v5.10.0
+	github.com/jackc/pgx/v5 v5.11.0
 	github.com/pressly/goose/v3 v3.28.0
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/stretchr/testify v1.12.1

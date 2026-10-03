@@ -12,5 +12,5 @@ ENTRYPOINT ["sh", "-c", "test -f build/dev/config.yaml || cp build/dev/config.ya
 RUN apk update && \
   apk add --no-cache ca-certificates git && \
   update-ca-certificates && \
-  go install github.com/go-delve/delve/cmd/dlv@latest && \
-  go install github.com/cespare/reflex@latest
+  go install github.com/go-delve/delve/cmd/dlv@v1.27.2 && \
+  go install github.com/cespare/reflex@v0.3.2
