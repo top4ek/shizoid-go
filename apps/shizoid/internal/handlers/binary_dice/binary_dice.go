@@ -45,7 +45,7 @@ func triggers(ctx context.Context, text string) bool {
 		set[strings.ToLower(a)] = struct{}{}
 	}
 	for _, w := range words {
-		if _, ok := set[strings.ToLower(strings.Trim(w, "?,.!"))]; ok {
+		if _, ok := set[strings.ToLower(strings.Trim(w, "()'\"?,.!"))]; ok {
 			return true
 		}
 	}

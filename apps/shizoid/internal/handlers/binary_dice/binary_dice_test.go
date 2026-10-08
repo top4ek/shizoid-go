@@ -16,6 +16,9 @@ func TestTriggers(t *testing.T) {
 		want bool
 	}{
 		{"anchor and question", "пить чай или кофе сейчас?", true},
+		{"anchor in parentheses", "пить чай (или) кофе сейчас?", true},
+		{"anchor and single quotes", "пить чай 'или' кофе сейчас?", true},
+		{"anchor and double quotes", "пить чай \"или\" кофе сейчас?", true},
 		{"no question mark", "пить чай или кофе сейчас", false},
 		{"too few words", "чай или кофе?", false},
 		{"no anchor", "как дела у тебя сегодня?", false},
