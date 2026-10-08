@@ -51,13 +51,14 @@ func CutSubcommand(update *models.Update) (verb, rest string) {
 	return strings.ToLower(verb), strings.TrimSpace(rest)
 }
 
+// Drops first word(command assumed) and removes extra spaces between words
 func ExtractCommandPayloadText(update *models.Update) string {
 	if update == nil || update.Message == nil {
 		return ""
 	}
-	array := strings.SplitN(update.Message.Text, " ", 2)
-	if len(array) == 2 {
-		return array[1]
+	array := strings.Fields(update.Message.Text)
+	if len(array) > 1 {
+		return strings.Join(array[1:], " ")
 	}
 	return ""
 }

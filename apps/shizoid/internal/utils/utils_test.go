@@ -54,25 +54,28 @@ func TestPickRandomString(t *testing.T) {
 	assert.Contains(t, input, result)
 }
 
-func updateText(str string) *models.Update {
-	return &models.Update{
-		Message: &models.Message{
-			Text: "/command " + str,
-			From: &models.User{
-				ID: 234,
-			},
-		},
+func TestExtractCommandPayloadText(t *testing.T) {
+	cases := []struct {
+		text   string
+		result string
+	}{
+		{"", ""},
+		{"/command   ", ""},
+		{"/command with test    string", "with test string"},
+		{"/command with\ttabulation  string", "with tabulation string"},
+		{"/command", ""},
 	}
-}
-
-func TestExtractCommandPayloadText_EmptyPayload(t *testing.T) {
-	str := ""
-	assert.Equal(t, str, ExtractCommandPayloadText((updateText(str))))
-}
-
-func TestExtractCommandPayloadText_WithPayload(t *testing.T) {
-	str := "with test    string"
-	assert.Equal(t, str, ExtractCommandPayloadText((updateText(str))))
+	for _, c := range cases {
+		payload := &models.Update{
+			Message: &models.Message{
+				Text: c.text,
+				From: &models.User{
+					ID: 234,
+				},
+			},
+		}
+		assert.Equal(t, c.result, ExtractCommandPayloadText(payload))
+	}
 }
 
 func TestParseLeadingCommand(t *testing.T) {
