@@ -37,3 +37,11 @@ func TestGenerationModes(t *testing.T) {
 		GenerationModeNeural,
 	}, GenerationModes())
 }
+
+func TestGenerationModesIndependentResults(t *testing.T) {
+	first := GenerationModes()
+	saved := first[1]
+	second := GenerationModes()
+	second[1] = GenerationModeNeural
+	assert.Equal(t, saved, first[1])
+}
