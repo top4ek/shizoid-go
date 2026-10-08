@@ -124,6 +124,18 @@ func TestIsBotOwner_NilUpdate(t *testing.T) {
 	assert.False(t, IsBotOwner(nil))
 }
 
+func TestIsBotOwner_NilMessage(t *testing.T) {
+	payload := &models.Update{}
+	assert.False(t, IsBotOwner(payload))
+}
+
+func TestIsBotOwner_NilFrom(t *testing.T) {
+	payload := &models.Update{
+		Message: &models.Message{},
+	}
+	assert.False(t, IsBotOwner(payload))
+}
+
 func TestUserMarkdownLink_WithUsername(t *testing.T) {
 	got := UserMarkdownLink(42, "alice", "alice")
 	assert.Equal(t, "[alice](https://t.me/alice)", got)
