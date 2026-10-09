@@ -30,6 +30,9 @@ func TestIsPermanentErrorSeparatesTheAnswersRetryingCannotChange(t *testing.T) {
 
 	assert.False(t, IsPermanentError(&bot.TooManyRequestsError{RetryAfter: 5}))
 	assert.False(t, IsPermanentError(errors.New("dial tcp: i/o timeout")))
+
+	assert.True(t, IsPermanentError(fmt.Errorf("%w, мимо чату", bot.ErrorNotFound)))
+	assert.True(t, IsPermanentError(fmt.Errorf("%w, паспортом не вышел", bot.ErrorUnauthorized)))
 }
 
 func TestPrepareOutboundText_ShortPassesThrough(t *testing.T) {
