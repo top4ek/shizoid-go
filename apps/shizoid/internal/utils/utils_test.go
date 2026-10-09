@@ -85,6 +85,8 @@ func TestParseLeadingCommand(t *testing.T) {
 		mention string
 		ok      bool
 	}{
+		{"/start\tбнопня", "start", "", true},
+		{" /start", "start", "", true},
 		{"/start", "start", "", true},
 		{"/start@GluChatAI_Dev_bot", "start", "GluChatAI_Dev_bot", true},
 		{"/start@GluChatAI_Dev_bot hello", "start", "GluChatAI_Dev_bot", true},

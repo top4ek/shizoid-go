@@ -18,15 +18,12 @@ import (
 // ParseLeadingCommand extracts the command name and optional @mention from a
 // message that starts with /.
 func ParseLeadingCommand(text string) (command, mention string, ok bool) {
-	if text == "" || text[0] != '/' {
+	fields := strings.Fields(text)
+	if len(fields) == 0 || fields[0][0] != '/' {
 		return "", "", false
 	}
-	end := strings.IndexByte(text, ' ')
-	if end == -1 {
-		end = len(text)
-	}
-	token := text[1:end]
-	command, mention, _ = strings.Cut(token, "@")
+
+	command, mention, _ = strings.Cut(fields[0][1:], "@")
 	return command, mention, true
 }
 
