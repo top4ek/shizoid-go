@@ -31,3 +31,13 @@ func TestLocaleAvailableMatchesHas(t *testing.T) {
 		assert.True(t, locale.Has(code), code)
 	}
 }
+func TestLocaleAvailableIndependentResults(t *testing.T) {
+	first := locale.Available()
+	saved := first[1]
+	t.Cleanup(func() {
+		first[1] = saved
+	})
+	second := locale.Available()
+	second[1] = "parallelepipedik"
+	assert.Equal(t, saved, first[1])
+}

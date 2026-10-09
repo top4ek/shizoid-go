@@ -74,7 +74,9 @@ func Load() error {
 // Available returns the sorted list of available locale codes.
 func Available() []string {
 	ensureLoaded()
-	return available
+	result := make([]string, len(available))
+	copy(result, available)
+	return result
 }
 
 // Has reports whether the given locale code exists.
