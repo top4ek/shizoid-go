@@ -88,6 +88,7 @@ func TestParseLeadingCommand(t *testing.T) {
 		{"/start\tбнопня", "start", "", true},
 		{" /start", "start", "", true},
 		{"/start", "start", "", true},
+		{"/", "", "", false},
 		{"/start@GluChatAI_Dev_bot", "start", "GluChatAI_Dev_bot", true},
 		{"/start@GluChatAI_Dev_bot hello", "start", "GluChatAI_Dev_bot", true},
 		{"hello", "", "", false},

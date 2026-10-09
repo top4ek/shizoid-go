@@ -24,6 +24,10 @@ func ParseLeadingCommand(text string) (command, mention string, ok bool) {
 	}
 
 	command, mention, _ = strings.Cut(fields[0][1:], "@")
+
+	if command == "" {
+		return command, mention, false
+	}
 	return command, mention, true
 }
 
