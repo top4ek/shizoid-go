@@ -24,15 +24,25 @@ func TestFitV2HonoursTheGivenBudget(t *testing.T) {
 
 func TestIsPermanentErrorSeparatesTheAnswersRetryingCannotChange(t *testing.T) {
 	assert.False(t, IsPermanentError(nil))
-	assert.True(t, IsPermanentError(fmt.Errorf("%w, bot was kicked from the group chat", bot.ErrorForbidden)))
 	assert.True(t, IsPermanentError(fmt.Errorf("%w, chat not found", bot.ErrorBadRequest)))
 	assert.True(t, IsPermanentError(&bot.MigrateError{MigrateToChatID: 42}))
 
 	assert.False(t, IsPermanentError(&bot.TooManyRequestsError{RetryAfter: 5}))
-	assert.False(t, IsPermanentError(errors.New("dial tcp: i/o timeout")))
+
+	timeout := errors.New("dial tcp: i/o timeout")
+	assert.False(t, IsPermanentError(timeout))
+
+	forbidden := fmt.Errorf("%w, bot was kicked from the group chat", bot.ErrorForbidden)
+	assert.True(t, IsPermanentError(forbidden))
 
 	assert.True(t, IsPermanentError(fmt.Errorf("%w, мимо чату", bot.ErrorNotFound)))
 	assert.True(t, IsPermanentError(fmt.Errorf("%w, паспортом не вышел", bot.ErrorUnauthorized)))
+
+	sendError := fmt.Errorf("%w, салфеточка", timeout)
+	assert.False(t, IsPermanentError(fmt.Errorf("%w, полотенчик", sendError)))
+
+	accessError := fmt.Errorf("%w, коробочка", forbidden)
+	assert.True(t, IsPermanentError(fmt.Errorf("%w, шкапчик", accessError)))
 }
 
 func TestPrepareOutboundText_ShortPassesThrough(t *testing.T) {
