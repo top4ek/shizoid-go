@@ -11,6 +11,12 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestFitV2CutsByRunes(t *testing.T) {
+	got := FitV2("ж🙂.", 3)
+	assert.Equal(t, "ж🙂", got)
+	assert.NoError(t, ValidateV2(got))
+}
+
 func TestFitV2HonoursTheGivenBudget(t *testing.T) {
 	got := FitV2(strings.Repeat(".", 100), 10)
 	assert.LessOrEqual(t, utf8.RuneCountInString(got), 10)
