@@ -360,6 +360,32 @@ func TestReplySkipsProviderWhenDailyLimitExceeded(t *testing.T) {
 	assert.Equal(t, "fallback provider", out)
 }
 
+func TestDailyLimitIsIndependentByProviderName(t *testing.T) {
+	var calls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"ok"}}]}`))
+	}))
+	defer srv.Close()
+
+	c := New([]Provider{
+		{Name: "first", BaseURL: srv.URL + "/v1", Model: "m", TimeoutSeconds: 5, DailyLimit: 1},
+		{Name: "second", BaseURL: srv.URL + "/v1", Model: "m", TimeoutSeconds: 5, DailyLimit: 1},
+	}, nil)
+
+	for range 2 {
+		_, err := reply(c, context.Background(), "")
+		require.NoError(t, err)
+	}
+	assert.Equal(t, 2, calls)
+
+	_, err := reply(c, context.Background(), "")
+	require.Error(t, err)
+
+	assert.Equal(t, 2, calls)
+}
+
 func TestDailyLimitSharedAcrossChains(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
