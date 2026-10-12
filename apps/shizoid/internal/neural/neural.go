@@ -374,14 +374,16 @@ func (c *Client) reserve(p Provider) (release func(), err error) {
 	if c.ledger == nil {
 		return func() {}, nil
 	}
-	if !c.ledger.reserve(p.Name, p.DailyLimit) {
+
+	reserveDay, ok := c.ledger.reserve(p.Name, p.DailyLimit)
+	if !ok {
 		logger.Instance().Debug("neural daily limit exceeded",
 			zap.String("provider", p.Name),
 			zap.Int("limit", p.DailyLimit),
 		)
 		return nil, fmt.Errorf("neural: %s: daily limit exceeded", p.Name)
 	}
-	return func() { c.ledger.release(p.Name, p.DailyLimit) }, nil
+	return func() { c.ledger.release(p.Name, p.DailyLimit, reserveDay) }, nil
 }
 
 func requestTimeout(p Provider) time.Duration {

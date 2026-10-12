@@ -23,34 +23,35 @@ func newUsageLedger() *usageLedger {
 	}
 }
 
-func (l *usageLedger) reserve(name string, limit int) bool {
+func (l *usageLedger) reserve(name string, limit int) (string, bool) {
 	if limit <= 0 {
-		return true
+		return "", true
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	reservationDay := l.today()
 	e := l.entries[name]
-	if e.day != l.today() {
-		e = dayCount{day: l.today()}
+	if e.day != reservationDay {
+		e = dayCount{day: reservationDay}
 	}
 	if e.count >= limit {
-		return false
+		return reservationDay, false
 	}
 	e.count++
 	l.entries[name] = e
-	return true
+	return reservationDay, true
 }
 
 // release returns a reserved unit after a failed or empty completion so only
 // successful answers consume the daily budget.
-func (l *usageLedger) release(name string, limit int) {
+func (l *usageLedger) release(name string, limit int, reservationDay string) {
 	if limit <= 0 {
 		return
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	e := l.entries[name]
-	if e.day != l.today() || e.count <= 0 {
+	if e.day != reservationDay || e.count <= 0 {
 		return
 	}
 	e.count--

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -49,21 +50,49 @@ func TestDailyLimitReleasedOnEmptyResponse(t *testing.T) {
 	assert.Equal(t, 2, calls, "empty completions must not consume the daily budget")
 }
 
+func TestUsageLedgerMidnightRelease(t *testing.T) {
+	current := time.Date(2026, 1, 1, 23, 59, 59, 0, time.UTC)
+	l := newUsageLedger()
+	l.now = func() time.Time { return current }
+
+	firstDay, ok := l.reserve("p", 1)
+	require.True(t, ok)
+
+	current = current.Add(5 * time.Minute)
+
+	_, ok = l.reserve("p", 1)
+	require.True(t, ok)
+
+	l.release("p", 1, firstDay)
+	_, ok = l.reserve("p", 1)
+	require.False(t, ok)
+}
+
 func TestUsageLedgerRelease(t *testing.T) {
 	l := newUsageLedger()
-	require.True(t, l.reserve("p", 1))
-	require.False(t, l.reserve("p", 1))
-	l.release("p", 1)
-	assert.True(t, l.reserve("p", 1))
+	day, ok := l.reserve("p", 1)
+	require.True(t, ok)
+
+	_, ok = l.reserve("p", 1)
+	require.False(t, ok)
+
+	l.release("p", 1, day)
+	_, ok = l.reserve("p", 1)
+	assert.True(t, ok)
 
 	// double release must not create budget below zero: after draining back to
 	// zero, exactly one reserve fits the limit again
-	l.release("p", 1)
-	l.release("p", 1)
-	require.True(t, l.reserve("p", 1))
-	assert.False(t, l.reserve("p", 1))
+	l.release("p", 1, day)
+	l.release("p", 1, day)
+	_, ok = l.reserve("p", 1)
+	require.True(t, ok)
+
+	_, ok = l.reserve("p", 1)
+	assert.False(t, ok)
 
 	// unlimited providers are untouched
-	l.release("unlimited", 0)
-	assert.True(t, l.reserve("unlimited", 0))
+	l.release("unlimited", 0, day)
+
+	_, ok = l.reserve("unlimited", 0)
+	assert.True(t, ok)
 }
