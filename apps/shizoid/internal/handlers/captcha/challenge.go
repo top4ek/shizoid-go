@@ -35,6 +35,9 @@ func callbackData(userID int64, emoji string) string {
 }
 
 func parseCallback(data string) (userID int64, emoji string, ok bool) {
+	if !strings.HasPrefix(data, CallbackPrefix) {
+		return 0, "", false
+	}
 	rest := strings.TrimPrefix(data, CallbackPrefix)
 	userPart, emoji, found := strings.Cut(rest, ":")
 	if !found || userPart == "" || emoji == "" {

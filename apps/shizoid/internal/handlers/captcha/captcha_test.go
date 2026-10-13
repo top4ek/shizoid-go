@@ -56,10 +56,12 @@ func TestParseCallback(t *testing.T) {
 	if !ok || id != 123456789 || emoji != "🔒" {
 		t.Fatalf("parseCallback: ok=%v id=%d emoji=%q", ok, id, emoji)
 	}
+
 	_, _, ok = parseCallback("captcha:bad")
-	if ok {
-		t.Fatal("expected parse failure")
-	}
+	assert.False(t, ok, "expected parse failure")
+
+	_, _, ok = parseCallback("123456789:🔒")
+	assert.False(t, ok)
 }
 
 func TestCallbackDataRoundTrip(t *testing.T) {
