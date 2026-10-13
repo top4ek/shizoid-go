@@ -1,6 +1,6 @@
 module apps/shizoid
 
-go 1.27.2
+go 1.27
 
 require (
 	github.com/getsentry/sentry-go v0.49.0
