@@ -117,7 +117,7 @@ func TestIsMentioned(t *testing.T) {
 }
 
 func TestCommandsUnique(t *testing.T) {
-	cmds := buildCommands()
+	cmds := commands()
 	seen := make(map[string]struct{}, len(cmds))
 	for _, c := range cmds {
 		assert.NotEmpty(t, c.name)

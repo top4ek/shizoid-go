@@ -54,11 +54,6 @@ type command struct {
 }
 
 func commands() []command {
-	return buildCommands()
-}
-
-// buildCommands lists the registered commands.
-func buildCommands() []command {
 	return []command{
 		{name: eightball.Command, description: eightball.Description, handler: eightball.Handler},
 		{name: gab.Command, description: gab.Description, handler: gab.Handler,
