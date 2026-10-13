@@ -99,6 +99,15 @@ func TestIsMentioned(t *testing.T) {
 			want:     false,
 		},
 		{
+			name: "emoji prefixed bot username",
+			msg: &models.Message{
+				Text:     "🙂@testbot hello",
+				Entities: []models.MessageEntity{{Type: models.MessageEntityTypeMention, Offset: 2, Length: 8}},
+			},
+			username: "testbot",
+			want:     true,
+		},
+		{
 			name: "case insensitive",
 			msg: &models.Message{
 				Text:     "@TestBot hello",

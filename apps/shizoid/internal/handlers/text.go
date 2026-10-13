@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/rand/v2"
 	"strings"
+	"unicode/utf16"
 
 	"github.com/go-telegram/bot"
 	tgmodels "github.com/go-telegram/bot/models"
@@ -91,17 +92,17 @@ func isMentioned(msg *tgmodels.Message) bool {
 	if botUsername == "" {
 		return false
 	}
-	runes := []rune(msg.Text)
+	encoded := utf16.Encode([]rune(msg.Text))
 	for _, e := range msg.Entities {
 		if e.Type != tgmodels.MessageEntityTypeMention {
 			continue
 		}
 		end := e.Offset + e.Length
-		if end > len(runes) {
+		if end > len(encoded) {
 			continue
 		}
-		mention := strings.ToLower(string(runes[e.Offset:end]))
-		if mention == "@"+botUsername {
+		decoded := utf16.Decode(encoded[e.Offset:end])
+		if strings.ToLower(string(decoded)) == "@"+botUsername {
 			return true
 		}
 	}
