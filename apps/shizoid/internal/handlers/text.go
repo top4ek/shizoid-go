@@ -94,13 +94,14 @@ func isMentioned(msg *tgmodels.Message) bool {
 	}
 	encoded := utf16.Encode([]rune(msg.Text))
 	for _, e := range msg.Entities {
-		if e.Type != tgmodels.MessageEntityTypeMention {
+		if e.Type != tgmodels.MessageEntityTypeMention ||
+			e.Offset < 0 ||
+			e.Length < 0 ||
+			e.Offset > len(encoded) ||
+			len(encoded)-e.Offset < e.Length {
 			continue
 		}
 		end := e.Offset + e.Length
-		if end > len(encoded) {
-			continue
-		}
 		decoded := utf16.Decode(encoded[e.Offset:end])
 		if strings.ToLower(string(decoded)) == "@"+botUsername {
 			return true

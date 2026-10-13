@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"math"
 	"testing"
 
 	"github.com/go-telegram/bot"
@@ -73,6 +74,51 @@ func TestIsMentioned(t *testing.T) {
 			},
 			username: "testbot",
 			want:     true,
+		},
+		{
+			name: "only name",
+			msg: &models.Message{
+				Text:     "@testbot",
+				Entities: []models.MessageEntity{{Type: models.MessageEntityTypeMention, Offset: 0, Length: 8}},
+			},
+			username: "testbot",
+			want:     true,
+		},
+		{
+			name: "negative length",
+			msg: &models.Message{
+				Text:     "@testbot hello",
+				Entities: []models.MessageEntity{{Type: models.MessageEntityTypeMention, Offset: 1, Length: -1}},
+			},
+			username: "testbot",
+			want:     false,
+		},
+		{
+			name: "negative offset",
+			msg: &models.Message{
+				Text:     "@testbot hello",
+				Entities: []models.MessageEntity{{Type: models.MessageEntityTypeMention, Offset: -1, Length: 8}},
+			},
+			username: "testbot",
+			want:     false,
+		},
+		{
+			name: "kinda long length",
+			msg: &models.Message{
+				Text:     "@testbot hello",
+				Entities: []models.MessageEntity{{Type: models.MessageEntityTypeMention, Offset: 1, Length: math.MaxInt}},
+			},
+			username: "testbot",
+			want:     false,
+		},
+		{
+			name: "kinda far offset",
+			msg: &models.Message{
+				Text:     "@testbot hello",
+				Entities: []models.MessageEntity{{Type: models.MessageEntityTypeMention, Offset: math.MaxInt, Length: 8}},
+			},
+			username: "testbot",
+			want:     false,
 		},
 		{
 			name: "mentions other user",
