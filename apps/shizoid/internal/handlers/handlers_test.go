@@ -37,6 +37,11 @@ func TestIsBotCommand(t *testing.T) {
 		Entities: []models.MessageEntity{{Type: models.MessageEntityTypeBotCommand, Offset: 0, Length: 17}},
 	}))
 	assert.False(t, isBotCommand(&models.Message{Text: "hello"}))
+	assert.True(t, isBotCommand(&models.Message{Text: " /ping"}))
+	assert.False(t, isBotCommand(&models.Message{
+		Text:     "hello /ping",
+		Entities: []models.MessageEntity{{Type: models.MessageEntityTypeBotCommand, Offset: 6, Length: 5}},
+	}))
 }
 
 func TestMessageScoreDelta(t *testing.T) {
@@ -45,12 +50,19 @@ func TestMessageScoreDelta(t *testing.T) {
 		msg  models.Message
 		want int
 	}{
+		{"text with /command after", models.Message{
+			Text:     "hello /ping",
+			Entities: []models.MessageEntity{{Type: models.MessageEntityTypeBotCommand, Offset: 6, Length: 5}}},
+			3},
 		{"text", models.Message{Text: "два слова"}, 3},
 		{"whitespace", models.Message{Text: " \n "}, 1},
 		{"media only", models.Message{}, 1},
 		{"caption", models.Message{Caption: "три слова здесь"}, 4},
 		{"command", models.Message{Text: "/winner current"}, 0},
-		{"caption command", models.Message{Caption: "/ping"}, 0},
+		{"command in caption", models.Message{
+			Caption:         "/ping",
+			CaptionEntities: []models.MessageEntity{{Type: models.MessageEntityTypeBotCommand, Offset: 0, Length: 5}}},
+			2},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
