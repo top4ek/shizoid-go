@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-GOLANGCI_LINT_VERSION ?= v2.14.0
+GOLANGCI_LINT_VERSION ?= v2.15.0
 GO := go
 GOLANGCI_LINT := $(if $(shell command -v golangci-lint 2>/dev/null),$(shell command -v golangci-lint 2>/dev/null),$(shell $(GO) env GOPATH)/bin/golangci-lint)
 
